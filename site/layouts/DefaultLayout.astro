@@ -8,13 +8,27 @@ const { title } = Astro.props;
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/jpg" href="/warlock_icon.jpg" />
-		<link rel="icon" href="/warlock_icon.jpg" />
-		<meta name="viewport" content="width=device-width" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="generator" content={Astro.generator} />
-    <title>{title} | Warlock</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
+		<title>{title} | Warlock</title>
 	</head>
 	<body>
-    <Navbar links={["Home", "Chat", "Discover"]} />
-    <slot />
+		<Navbar
+			current={Astro.url.pathname}
+			links={[
+				{ label: "Home", href: "/" },
+				{ label: "Chat", href: "/chat" },
+				{ label: "Discover", href: "/discover" },
+			]}
+		/>
+		<main class="flex-1 flex flex-col w-full max-w-3xl mx-auto px-4 py-6">
+			<slot />
+		</main>
+		<footer class="text-center text-mist text-base px-4 pb-4">
+			Rules text from the SRD 5.2.1 by Wizards of the Coast, CC-BY-4.0.
+		</footer>
 	</body>
 </html>

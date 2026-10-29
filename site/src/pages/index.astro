@@ -1,5 +1,56 @@
 ---
 import DefaultLayout from "../../layouts/DefaultLayout.astro"
+
+const features = [
+	{ title: "SEEKS", body: "Searches the whole SRD 5.2.1, from conditions to monster stat blocks, as often as a question needs." },
+	{ title: "CITES", body: "Every ruling points back to the page it came from, so you can check it at the table." },
+  { title: "REMEMBERS", body: "Follow-up questions keep the thread of the conversation." },
+  ];
+
+// Splash titles; one is picked at random on each visit.
+const titles = [
+	"Hold Fast, Adventurer!",
+	"The Road is Long, Voyager.",
+	"Mind Your Axe, Brute!",
+	"Stay a While, Wanderer.",
+	"You Can Certainly Try.",
+	"Everyone Roll Perception.",
+	"A Flash of Steel at Night.",
+	"The Bandits Howl with Laughter.",
+	"The Tavern is Empty, and Quiet.",
+	"Night Falls on Darenmoor.",
+	"Siege-Cannons Blaze with Fire.",
+	"A Humble Meal of Gruel and Bread.",
+];
 ---
 <DefaultLayout title="Home">
+	<section class="flex flex-col items-center text-center gap-6 py-8 sm:py-12">
+		<img src="/warlock_icon.jpg" alt="A pixel-art warlock in a red robe holding a flaming staff" width="160" height="160" class="portrait" />
+    <h1 id="splash-title" class="font-pixel text-2xl sm:text-4xl text-ember leading-tight [text-shadow:4px_4px_0_var(--color-ink)]">{titles[0]}</h1>
+    {/* Inline so it runs before first paint: the default title never flashes. */}
+    <script define:vars={{ titles }}>
+      document.getElementById("splash-title").textContent = titles[Math.floor(Math.random() * titles.length)];
+    </script>
+    <p class="text-xl sm:text-2xl text-bone max-w-md">Do you seek answers? Do complicated 5th Edition rules questions vex and confound you? Consult the Warlock, and find what you seek... </p>
+    <p class="text-xl sm:text-2xl text-bone max-w-md"><span class="text-ember">WARLOCK_AI:</span> A rules agent for the fifth edition SRD. Returns cited answers for complicated rules questions, using BM25 and standard RAG.</p>
+    <div class="flex items-center">
+      <p class="blink text-ember mt-1 mr-1" aria-hidden="true">▶</p>
+      <a href="/chat" class="font-pixel text-xs sm:text-sm text-bone hover:text-ember hover:underline no-underline mt-2">
+        I SPEAK TO THE WARLOCK
+      </a>
+    </div>
+	</section>
+
+	<section class="grid gap-6 sm:grid-cols-3 mt-4">
+		{features.map((f) => (
+			<div class="pixel-box">
+				<h2 class="font-pixel text-[10px] text-ember mb-2">{f.title}</h2>
+				<p>{f.body}</p>
+			</div>
+		))}
+	</section>
+
+	<p class="text-center text-mist mt-10">
+		Or browse the tome yourself in <a href="/discover" class="text-bone hover:text-ember">Discover</a>.
+	</p>
 </DefaultLayout>
