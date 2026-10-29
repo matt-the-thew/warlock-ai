@@ -1,4 +1,4 @@
-"""Command line entry point: `dnd-rag ingest` and `dnd-rag search`."""
+"""Command line entry point: `dnd-rag ingest`, `search`, `ask` and `serve`."""
 
 from __future__ import annotations
 
@@ -95,10 +95,18 @@ def main() -> None:
     p_ask = sub.add_parser("ask", help="Ask the rules agent (interactive without a question)")
     p_ask.add_argument("question", nargs="?")
 
+    p_serve = sub.add_parser("serve", help="Run the HTTP API the site talks to")
+    p_serve.add_argument("--host", default="127.0.0.1")
+    p_serve.add_argument("--port", type=int, default=8000)
+
     args = parser.parse_args()
     if args.command == "ingest":
         ingest(args.pdf, args.db)
     elif args.command == "search":
         search(args.query, args.db, args.k)
+    elif args.command == "serve":
+        from .api import serve
+
+        serve(args.db, args.host, args.port)
     else:
         chat(args.db, args.question)

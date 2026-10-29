@@ -39,5 +39,16 @@ Claude's answer then carries `search_result_location` citations, which the
 agent maps back to SRD pages. `Agent.ask()` yields `search` / `text` /
 `citation` / `done` / `error` events for a UI to render.
 
+## Site
+
+```sh
+uv run dnd-rag serve               # API on http://127.0.0.1:8000
+cd site && pnpm install && pnpm dev   # http://localhost:4321, proxies /api
+```
+
+`api.py` exposes `POST /api/ask` (the agent's events as server-sent events, with a
+`session` id for follow-up questions) and `GET /api/search?q=` (the index, no Claude
+call). The site has three pages: Home, Chat and Discover (direct SRD search).
+
 `data/` is generated and git-ignored. PyMuPDF (AGPL) is an optional `ingest` extra; you
 don't need it to query the index.
