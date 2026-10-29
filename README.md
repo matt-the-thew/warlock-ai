@@ -24,5 +24,20 @@ Pipeline (`src/dnd_rag/`):
    search and `bge-small-en-v1.5` embeddings (local, via fastembed) for vector search.
    `SrdIndex.search()` merges both rankings with reciprocal rank fusion.
 
+## Agent
+
+```sh
+cp .env.example .env               # then fill in ANTHROPIC_API_KEY
+uv run dnd-rag ask "Can a grappled creature still cast spells?"
+uv run dnd-rag ask                 # interactive session
+```
+
+`agent.py` runs a streaming tool-use loop on Claude Opus 5.5. Claude calls
+`search_srd(query)`, as often as the question needs. Each hit goes back as a
+`search_result` block (one text block per paragraph) with citations enabled.
+Claude's answer then carries `search_result_location` citations, which the
+agent maps back to SRD pages. `Agent.ask()` yields `search` / `text` /
+`citation` / `done` / `error` events for a UI to render.
+
 `data/` is generated and git-ignored. PyMuPDF (AGPL) is an optional `ingest` extra; you
 don't need it to query the index.

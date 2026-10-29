@@ -7,6 +7,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PDF = ROOT / "SRD_CC_v5.2.1.pdf"
@@ -44,7 +45,42 @@ def search(query: str, db: Path, k: int) -> None:
         print("    " + hit.text[:240].replace("\n", " ") + "\n")
 
 
+def chat(db: Path, question: str | None) -> None:
+    """Ask one question, or with no question start an interactive session."""
+    from .agent import Agent
+    from .index import SrdIndex
+
+    agent = Agent(SrdIndex(db))
+    while True:
+        q = question or input("\n> ").strip()
+        if not q:
+            continue
+        if q.lower() in {"exit", "quit"}:
+            return
+        footnotes: dict[str, int] = {}
+        for event in agent.ask(q):
+            match event.type:
+                case "search":
+                    print(f"  [searching: {event.data['query']}]", flush=True)
+                case "text":
+                    print(event.data["text"], end="", flush=True)
+                case "citation" if "label" in event.data:
+                    n = footnotes.setdefault(event.data["label"], len(footnotes) + 1)
+                    print(f"[{n}]", end="", flush=True)
+                case "error":
+                    print(f"\n[error: {event.data['message']}]")
+        print()
+        for label, n in footnotes.items():
+            print(f"  [{n}] {label}")
+        if question:
+            return
+
+
 def main() -> None:
+    # Put ANTHROPIC_API_KEY from the project's .env into the environment, where
+    # anthropic.Anthropic() looks for it. A variable already exported wins.
+    load_dotenv(ROOT / ".env")
+
     parser = argparse.ArgumentParser(prog="dnd-rag")
     parser.add_argument("--db", type=Path, default=DEFAULT_DB)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -56,8 +92,13 @@ def main() -> None:
     p_search.add_argument("query")
     p_search.add_argument("-k", type=int, default=5)
 
+    p_ask = sub.add_parser("ask", help="Ask the rules agent (interactive without a question)")
+    p_ask.add_argument("question", nargs="?")
+
     args = parser.parse_args()
     if args.command == "ingest":
         ingest(args.pdf, args.db)
-    else:
+    elif args.command == "search":
         search(args.query, args.db, args.k)
+    else:
+        chat(args.db, args.question)
