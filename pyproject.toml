@@ -1,0 +1,25 @@
+[project]
+name = "dnd-rag"
+version = "0.1.0"
+description = "Retrieval-augmented rules assistant for the D&D System Reference Document 5.2.1"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic>=2.3.0",
+    "fastembed>=0.9.1",
+    "numpy>=2.5.4",
+    "python-dotenv>=1.2.4",
+]
+
+[project.optional-dependencies]
+# PyMuPDF is AGPL-licensed, so it is only needed to build the index, never to serve it.
+ingest = [
+    "pymupdf>=2.0",
+]
+
+[project.scripts]
+dnd-rag = "dnd_rag.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"
