@@ -10,6 +10,10 @@ export default defineConfig({
   integrations: [react()],
 
   vite: {
-    plugins: [tailwindcss()]
+    plugins: [tailwindcss()],
+    server: {
+      // The Python API (`uv run dnd-rag serve`).
+      proxy: { '/api': 'http://127.0.0.1:8000' }
+    }
   }
 });
