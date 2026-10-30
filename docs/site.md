@@ -18,6 +18,19 @@ Manage the background dev server with `pnpm astro dev status`,
 note the `/api` proxy only exists in the dev server, so a deployed build
 needs the API served from the same origin.
 
+## Deploying
+
+`pnpm run deploy` builds the site and deploys it to Cloudflare with
+Wrangler (`wrangler.jsonc`). Cloudflare serves `dist/` directly; only
+`/api/*` runs the Worker in `worker/index.ts`, which forwards the request
+to the API on Cloud Run (`API_ORIGIN`) and streams the response back, so
+the site's relative `/api` URLs work unchanged. The Worker also replaces
+`X-Forwarded-For` with the visitor's address (`CF-Connecting-IP`), which
+is what the API's `TRUSTED_PROXY_HOPS=2` relies on.
+
+To try the Worker locally, run the API and then
+`pnpm wrangler dev --var API_ORIGIN:http://127.0.0.1:8000` after a build.
+
 ## Layout
 
 Pages live under `site/src/pages/`, but components and layouts live at
@@ -37,6 +50,8 @@ with `../../`. Keep new files in those same folders.
 | `components/Markdown.tsx` | Tiny renderer for answer text. |
 | `components/srd.ts` | PDF path, page-link and page-label helpers. |
 | `src/styles/global.css` | Tailwind import, theme tokens, shared component classes. |
+| `worker/index.ts` | Cloudflare Worker that forwards `/api/*` to Cloud Run. Not part of the Astro build. |
+| `wrangler.jsonc` | Cloudflare deployment: assets, Worker, `API_ORIGIN`, custom domain. |
 | `public/` | `SRD_CC_v5.2.1.pdf` (for citation links), favicon, warlock icon. |
 
 ## Sign-in (Clerk)

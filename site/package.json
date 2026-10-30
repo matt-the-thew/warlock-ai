@@ -9,6 +9,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "deploy": "astro build && wrangler deploy",
     "astro": "astro",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -26,6 +27,7 @@
   },
   "devDependencies": {
     "prettier": "^3.9.10",
-    "prettier-plugin-astro": "^1.1.2"
+    "prettier-plugin-astro": "^1.1.2",
+    "wrangler": "^4.156.0"
   }
 }

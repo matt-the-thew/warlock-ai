@@ -25,7 +25,8 @@ AUTHORIZED_PARTIES_ENV = "CLERK_AUTHORIZED_PARTIES"
 # Tolerate small clock differences between Clerk and this server.
 CLOCK_LEEWAY_SECONDS = 5
 # How many proxies in front of the API append to X-Forwarded-For: 0 when run
-# directly, 1 on Cloud Run, 2 behind Firebase Hosting and then Cloud Run.
+# directly, 1 on Cloud Run alone, 2 behind the site's Cloudflare Worker
+# (site/worker/index.ts) and then Cloud Run.
 TRUSTED_PROXY_HOPS_ENV = "TRUSTED_PROXY_HOPS"
 
 

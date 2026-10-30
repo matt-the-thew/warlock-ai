@@ -1,0 +1,24 @@
+// Cloudflare deployment for the site: static files from `dist/`, plus the
+// Worker in `worker/index.ts`, which forwards `/api/*` to the API on Cloud
+// Run. Deploy with `pnpm run deploy` (builds first).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dnd-rag",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-23",
+  "assets": {
+    "directory": "./dist",
+    // Only API calls run the Worker; page and asset requests never do, so
+    // they don't count toward the Workers request quota.
+    "run_worker_first": ["/api/*"],
+  },
+  "vars": {
+    // TODO: set to the URL `gcloud run deploy` prints for dnd-rag-api.
+    "API_ORIGIN": "https://dnd-rag-api-REPLACE-ME.a.run.app",
+  },
+  "routes": [
+    // TODO: set to your domain. Cloudflare already manages its DNS, so
+    // `wrangler deploy` creates the record and certificate itself.
+    { "pattern": "yourdomain.com", "custom_domain": true },
+  ],
+}

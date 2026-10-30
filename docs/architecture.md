@@ -263,11 +263,11 @@ session claims in `plan_for`.
 
 Anonymous callers are told apart by IP (`auth.client_ip`). Behind
 proxies, set `TRUSTED_PROXY_HOPS` to how many of them append to
-`X-Forwarded-For` — 1 on Cloud Run, 2 behind Firebase Hosting and then
-Cloud Run — and the API takes the entry that many places from the right,
-ignoring anything further left, which the caller could forge. Unset (0), it
-uses the TCP peer, so through the Vite dev proxy every anonymous caller
-shares one `127.0.0.1` budget.
+`X-Forwarded-For` — 1 on Cloud Run alone, 2 behind the site's Cloudflare
+Worker (`site/worker/index.ts`) and then Cloud Run — and the API takes the
+entry that many places from the right, ignoring anything further left,
+which the caller could forge. Unset (0), it uses the TCP peer, so through
+the Vite dev proxy every anonymous caller shares one `127.0.0.1` budget.
 
 Concurrency and state:
 
