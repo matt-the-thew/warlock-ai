@@ -1,0 +1,6 @@
+# Generated or vendored; changed only by pnpm or never.
+pnpm-lock.yaml
+public/
+
+# Prose is wrapped by hand.
+*.md

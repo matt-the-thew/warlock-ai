@@ -42,6 +42,9 @@ commands from the repo root and pnpm commands from `site/`.
 | Run the site on :4321 (proxies `/api`) | `pnpm astro dev --background` (see `site/AGENTS.md`) |
 | Production build of the site | `pnpm build` |
 | Lint Python (ruff is installed globally) | `ruff check src` |
+| Install the format-on-commit hook (once per clone) | `uv run pre-commit install` |
+| Format Python / the site | `ruff format` / `pnpm format` |
+| Format every file the hook covers | `uv run pre-commit run --all-files` |
 
 `ask` and `serve` need `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`).
 Sign-in needs `PUBLIC_CLERK_PUBLISHABLE_KEY` in the same file; without them `serve` runs
@@ -195,9 +198,16 @@ one.
   dataclass fields (`from __future__ import annotations` is already used in
   every module). TypeScript: the site uses Astro's `strict` tsconfig; give
   props and API payloads explicit types, avoid `any`.
-- **Match the surrounding code.** No formatter is configured. Follow the
-  style of the file you are in, and don't reformat code you aren't
-  otherwise changing — reformatting buries the real change in the diff.
+- **Let the formatters own layout.** Python is formatted by Ruff
+  (`[tool.ruff]` in `pyproject.toml`) and the site by Prettier
+  (`site/.prettierrc.json`); a pre-commit hook (`.pre-commit-config.yaml`)
+  runs both on staged files. Run the formatter on files you change rather
+  than hand-formatting, and don't fight its output. If the hook stops a
+  commit because it reformatted something, review the change, `git add`
+  it, and commit again. Markdown is not auto-formatted; wrap prose by hand
+  to match the file.
+- **Match the surrounding code** in everything a formatter doesn't decide:
+  naming, structure, comment density and idiom.
 
 ## Code style: naming
 

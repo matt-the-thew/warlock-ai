@@ -1,0 +1,24 @@
+# Formats staged files on `git commit`. Install once per clone with
+# `uv run pre-commit install`. If a hook reformats anything, the commit stops
+# so you can review the result and `git add` it; pre-commit stashes unstaged
+# changes first, so hunks left out by `git add -p` are never touched.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Keep in step with the ruff you run locally (`ruff --version`).
+    rev: v0.15.20
+    hooks:
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Uses the site's own Prettier (and its Astro plugin) so the hook, the
+      # editor and `pnpm format` all agree. Needs `pnpm install` in site/.
+      # Prettier loads plugins and ignore files relative to the working
+      # directory, so it runs from site/ with the `site/` prefix stripped off
+      # each staged path.
+      - id: prettier
+        name: prettier
+        language: system
+        entry: bash -c 'cd site && node_modules/.bin/prettier --write --ignore-unknown "${@#site/}"' --
+        files: ^site/
+        types: [text]

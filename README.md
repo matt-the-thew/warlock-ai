@@ -39,6 +39,19 @@ Claude's answer then carries `search_result_location` citations, which the
 agent maps back to SRD pages. `Agent.ask()` yields `search` / `text` /
 `citation` / `done` / `error` events for a UI to render.
 
+## Formatting
+
+Ruff formats Python and Prettier formats the site. A pre-commit hook runs both
+on staged files; install it once per clone (after `pnpm install` in `site/`):
+
+```sh
+uv sync
+uv run pre-commit install
+```
+
+If the hook reformats a file, the commit stops; review the change, `git add` it
+and commit again. `.vscode/` turns on format-on-save with the same settings.
+
 ## Site
 
 ```sh
