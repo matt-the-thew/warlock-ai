@@ -10,8 +10,12 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING
 
-from .parse import Block
+# For annotations only: index.py imports this module at query time, and parse
+# imports PyMuPDF (AGPL), which `serve` must run without.
+if TYPE_CHECKING:
+    from .parse import Block
 
 MAX_WORDS = 450
 
