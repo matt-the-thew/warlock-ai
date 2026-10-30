@@ -1,4 +1,4 @@
-"""Command line entry point: `dnd-rag ingest`, `search`, `ask` and `serve`."""
+"""Command line entry point: `dnd-rag ingest`, `search`, `ask`, `serve` and `spend`."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PDF = ROOT / "SRD_CC_v5.2.1.pdf"
 DEFAULT_DB = ROOT / "data" / "srd.db"
-# Token usage for rate limits; kept apart from the index so re-ingesting keeps it.
+# Token usage and monthly spend; kept apart from the index so re-ingesting keeps it.
 DEFAULT_USAGE_DB = ROOT / "data" / "usage.db"
 
 
@@ -78,6 +78,17 @@ def chat(db: Path, question: str | None) -> None:
             return
 
 
+def show_spend(usage_db: Path) -> None:
+    """Print this month's estimated chat spend against the cap."""
+    from .spend import SpendLedger, limit_from_env
+
+    monthly = SpendLedger(usage_db, limit_from_env()).current()
+    print(
+        f"{monthly.month}: ${monthly.spent_usd:.4f} of ${monthly.limit_usd:.2f} "
+        f"(estimated at list price; resets {monthly.resets_at:%Y-%m-%d})"
+    )
+
+
 def main() -> None:
     # Put ANTHROPIC_API_KEY from the project's .env into the environment, where
     # anthropic.Anthropic() looks for it. A variable already exported wins.
@@ -102,6 +113,9 @@ def main() -> None:
     p_serve.add_argument("--port", type=int, default=8000)
     p_serve.add_argument("--usage-db", type=Path, default=DEFAULT_USAGE_DB)
 
+    p_spend = sub.add_parser("spend", help="Show this month's estimated chat spend")
+    p_spend.add_argument("--usage-db", type=Path, default=DEFAULT_USAGE_DB)
+
     args = parser.parse_args()
     if args.command == "ingest":
         ingest(args.pdf, args.db)
@@ -111,5 +125,7 @@ def main() -> None:
         from .api import serve
 
         serve(args.db, args.usage_db, args.host, args.port)
+    elif args.command == "spend":
+        show_spend(args.usage_db)
     else:
         chat(args.db, args.question)

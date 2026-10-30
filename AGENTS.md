@@ -37,6 +37,7 @@ commands from the repo root and pnpm commands from `site/`.
 | Query the index, no Claude call | `uv run dnd-rag search "jump distance" -k 5` |
 | Ask the agent once / interactively | `uv run dnd-rag ask "question"` / `uv run dnd-rag ask` |
 | Run the HTTP API on :8000 | `uv run dnd-rag serve` |
+| Show this month's estimated chat spend | `uv run dnd-rag spend` |
 | Install site deps | `pnpm install` |
 | Run the site on :4321 (proxies `/api`) | `pnpm astro dev --background` (see `site/AGENTS.md`) |
 | Production build of the site | `pnpm build` |

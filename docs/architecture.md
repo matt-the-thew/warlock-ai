@@ -31,7 +31,7 @@ All code lives in `src/dnd_rag/`. `cli.py` is the single entry point
 | `limits.py` | Daily token budgets per plan (`data/usage.db`), burst cap | `auth` |
 | `spend.py` | List-price cost per response, monthly spend cap (`data/usage.db`) | anthropic |
 | `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search`, `/api/usage` | fastapi, uvicorn, `agent`, `index`, `auth`, `limits`, `spend` |
-| `cli.py` | `ingest`, `search`, `ask`, `serve` subcommands; loads `.env` | everything, lazily |
+| `cli.py` | `ingest`, `search`, `ask`, `serve`, `spend` subcommands; loads `.env` | everything, lazily |
 
 ### Licensing boundary: PyMuPDF
 
@@ -284,6 +284,7 @@ wins), then dispatches:
 - `ask [QUESTION]` — one question, or an interactive loop (`exit`/`quit`
   to leave) with numbered footnotes.
 - `serve [--host] [--port] [--usage-db]` — run the API.
+- `spend [--usage-db]` — print this month's estimated spend against the cap.
 
 `--db` (before the subcommand) overrides the index path for all of them.
 
