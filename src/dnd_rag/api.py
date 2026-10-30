@@ -1,29 +1,47 @@
-"""HTTP API for the site: `POST /api/ask` streams agent events, `GET /api/search`.
+"""HTTP API for the site: `POST /api/ask` streams agent events, `GET /api/search`,
+`GET /api/usage` reports the caller's token budget.
 
 A FastAPI app served by uvicorn. Answers stream as server-sent events, one
 JSON `{"type", "data"}` object per `data:` line, so the browser can render
 each `Agent.ask()` event as it arrives. Errors are JSON `{"error": str}`.
+
+Callers are identified by `auth` (Clerk token or IP) and `/api/ask` is
+metered by `limits`; search is public and unmetered since it never calls
+Claude.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 import uuid
 from collections.abc import Iterator
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, Query, Request
+from anthropic.types.beta import BetaUsage
+from fastapi import Depends, FastAPI, Header, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
-from .agent import Agent
+from .agent import Agent, UsageCallback
+from .auth import (
+    PUBLISHABLE_KEY_ENV,
+    AuthError,
+    ClerkVerifier,
+    Identity,
+    anonymous,
+    bearer_token,
+    verifier_from_env,
+)
 from .index import Hit, SrdIndex
+from .limits import BurstLimiter, UsageStore, billable_tokens
 
 MAX_SESSIONS = 200
 MAX_K = 20
@@ -43,26 +61,47 @@ class LockedIndex:
             return self._index.search(query, k)
 
 
+@dataclass
+class Session:
+    owner: Identity
+    agent: Agent
+
+
 class Sessions:
     """Conversations by session id, oldest first, so history survives a page's
-    follow-up questions. Kept in memory and lost on restart."""
+    follow-up questions. Kept in memory and lost on restart.
 
-    def __init__(self, index: LockedIndex):
+    Each session belongs to the identity that started it and bills that
+    identity's usage, so a leaked session id cannot spend someone else's
+    budget: another caller presenting it simply gets a new session.
+    """
+
+    def __init__(self, index: LockedIndex, usage: UsageStore):
         self.index = index
-        self._agents: dict[str, Agent] = {}
+        self.usage = usage
+        self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
 
-    def get_or_create(self, session: str | None) -> tuple[str, Agent]:
+    def get_or_create(self, session_id: str | None, owner: Identity) -> tuple[str, Agent]:
         with self._lock:
-            if session is not None and session in self._agents:
-                return session, self._agents[session]
-            if len(self._agents) >= MAX_SESSIONS:
-                oldest = next(iter(self._agents))
-                self._agents.pop(oldest)
-            session = uuid.uuid4().hex
-            agent = Agent(self.index)  # type: ignore[arg-type]
-            self._agents[session] = agent
-            return session, agent
+            if session_id is not None:
+                existing = self._sessions.get(session_id)
+                if existing is not None and existing.owner == owner:
+                    return session_id, existing.agent
+
+            if len(self._sessions) >= MAX_SESSIONS:
+                oldest = next(iter(self._sessions))
+                self._sessions.pop(oldest)
+            new_id = uuid.uuid4().hex
+            agent = Agent(self.index, on_usage=self._meter(owner))  # type: ignore[arg-type]
+            self._sessions[new_id] = Session(owner, agent)
+            return new_id, agent
+
+    def _meter(self, owner: Identity) -> UsageCallback:
+        def record(usage: BetaUsage) -> None:
+            self.usage.record(owner, billable_tokens(usage))
+
+        return record
 
 
 class AskRequest(BaseModel):
@@ -86,10 +125,47 @@ def stream_answer(session: str, agent: Agent, question: str) -> Iterator[str]:
         yield sse("error", {"message": "Something went wrong answering that."})
 
 
-def create_app(db: Path) -> FastAPI:
+def rate_limited(message: str, retry_after: float, **extra: object) -> JSONResponse:
+    """A 429 with a `Retry-After` header and the seconds to wait in the body."""
+    seconds = math.ceil(retry_after)
+    return JSONResponse(
+        {"error": message, "retry_after": seconds} | extra,
+        status_code=429,
+        headers={"Retry-After": str(seconds)},
+    )
+
+
+def create_app(db: Path, usage_db: Path, verifier: ClerkVerifier | None) -> FastAPI:
+    """The API app. With no `verifier` (Clerk not configured) everyone is anonymous."""
     app = FastAPI(title="dnd-rag", docs_url=None, redoc_url=None, openapi_url=None)
     index = LockedIndex(db)
-    sessions = Sessions(index)
+    usage = UsageStore(usage_db)
+    sessions = Sessions(index, usage)
+    burst = BurstLimiter()
+
+    def identify(request: Request, authorization: str | None = Header(None)) -> Identity:
+        """The caller: a verified Clerk user, or anonymous by IP if no token is sent.
+
+        A token that is sent but invalid is a 401 rather than a silent downgrade
+        to anonymous, so the site knows to refresh it.
+        """
+        ip = "unknown"
+        if request.client is not None:
+            ip = request.client.host
+        if authorization is None:
+            return anonymous(ip)
+
+        token = bearer_token(authorization)
+        if token is None:
+            raise HTTPException(401, "Authorization must be 'Bearer <token>'")
+        if verifier is None:
+            raise HTTPException(401, "Sign-in is not configured on this server")
+        try:
+            user_id = verifier.verify(token)
+        except AuthError as error:
+            log.info("rejected token: %s", error)
+            raise HTTPException(401, "Your session has expired; sign in again") from error
+        return Identity(key=f"user:{user_id}", user_id=user_id)
 
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, error: HTTPException) -> JSONResponse:
@@ -117,12 +193,29 @@ def create_app(db: Path) -> FastAPI:
         results = [asdict(hit) | {"label": hit.citation} for hit in index.search(query, k)]
         return JSONResponse({"results": results})
 
+    @app.get("/api/usage")
+    def get_usage(identity: Identity = Depends(identify)) -> JSONResponse:
+        allowance = usage.allowance(identity)
+        return JSONResponse(allowance.to_dict() | {"signed_in": identity.is_signed_in})
+
     @app.post("/api/ask")
-    def ask(body: AskRequest) -> Response:
+    def ask(body: AskRequest, identity: Identity = Depends(identify)) -> Response:
         question = body.question.strip()
         if question == "":
             return JSONResponse({"error": "Missing question"}, status_code=400)
-        session, agent = sessions.get_or_create(body.session)
+
+        allowance = usage.allowance(identity)
+        if allowance.is_exhausted:
+            return rate_limited(
+                "The warlock's daily power is spent. It returns at midnight UTC.",
+                retry_after=(allowance.resets_at - datetime.now(UTC)).total_seconds(),
+                allowance=allowance.to_dict(),
+            )
+        wait = burst.try_acquire(identity)
+        if wait is not None:
+            return rate_limited("Slow down, traveller. Ask again in a moment.", retry_after=wait)
+
+        session, agent = sessions.get_or_create(body.session, identity)
         return StreamingResponse(
             stream_answer(session, agent, question),
             media_type="text/event-stream",
@@ -132,5 +225,8 @@ def create_app(db: Path) -> FastAPI:
     return app
 
 
-def serve(db: Path, host: str, port: int) -> None:
-    uvicorn.run(create_app(db), host=host, port=port)
+def serve(db: Path, usage_db: Path, host: str, port: int) -> None:
+    verifier = verifier_from_env()
+    if verifier is None:
+        log.warning("%s is not set: sign-in is disabled, everyone is anonymous", PUBLISHABLE_KEY_ENV)
+    uvicorn.run(create_app(db, usage_db, verifier), host=host, port=port)

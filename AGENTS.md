@@ -43,6 +43,8 @@ commands from the repo root and pnpm commands from `site/`.
 | Lint Python (ruff is installed globally) | `ruff check src` |
 
 `ask` and `serve` need `ANTHROPIC_API_KEY` in `.env` (copy `.env.example`).
+Sign-in needs `PUBLIC_CLERK_PUBLISHABLE_KEY` in the same file; without them `serve` runs
+with everyone anonymous.
 Every command except `ingest` needs `data/srd.db` to exist.
 
 There is no automated test suite yet. Verify changes by exercising them:

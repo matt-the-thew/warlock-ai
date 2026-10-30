@@ -27,7 +27,9 @@ All code lives in `src/dnd_rag/`. `cli.py` is the single entry point
 | `chunk.py` | `Block`s → retrieval `Chunk`s, one per SRD entry | `parse.Block` |
 | `index.py` | Build the SQLite index; hybrid search returning `Hit`s | fastembed, numpy, `chunk.Chunk` |
 | `agent.py` | Claude tool-use loop; yields `Event`s | anthropic, `index` |
-| `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search` | fastapi, uvicorn, `agent`, `index` |
+| `auth.py` | Verify Clerk session tokens; `Identity` of a caller | pyjwt |
+| `limits.py` | Daily token budgets per plan (`data/usage.db`), burst cap | `auth` |
+| `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search`, `/api/usage` | fastapi, uvicorn, `agent`, `index`, `auth`, `limits` |
 | `cli.py` | `ingest`, `search`, `ask`, `serve` subcommands; loads `.env` | everything, lazily |
 
 ### Licensing boundary: PyMuPDF
@@ -204,13 +206,51 @@ failures (400).
 
 - **`GET /api/search?q=<query>&k=<n>`** → `{"results": [Hit fields +
   label]}`. `k` defaults to 8, clamped to `1..MAX_K` (20). No Claude call.
+- **`GET /api/usage`** → `{"plan", "used", "limit", "resets_at",
+  "signed_in"}` for the caller (see below).
 - **`POST /api/ask`** with JSON `{"question": str, "session"?: str}` →
   `text/event-stream`. Each event is one line `data: {"type", "data"}`
   followed by a blank line. The first event is always
   `{"type": "session", "data": {"session": "<id>"}}`; send that id back
   with the next question to continue the conversation. The rest are the
   agent events above. Unexpected exceptions are logged and sent as an
-  `error` event.
+  `error` event. Over a limit it returns **429** `{"error", "retry_after"}`
+  with a `Retry-After` header instead of a stream.
+
+### Auth and rate limits (`auth.py`, `limits.py`)
+
+Sign-in happens entirely in the browser with Clerk. The site sends the
+session token as `Authorization: Bearer <jwt>`; the `identify` dependency
+verifies it against Clerk's JWKS (derived from
+`PUBLIC_CLERK_PUBLISHABLE_KEY`, so the API never needs the secret key) and
+checks `azp` against `CLERK_AUTHORIZED_PARTIES` when set. A request with
+no header is anonymous, identified as `ip:<address>`; a header that fails
+verification is a 401, never a silent downgrade. With no publishable key
+configured, everyone is anonymous.
+
+An `Identity.key` (`user:<clerk id>` or `ip:<address>`) is what usage is
+billed to. `/api/ask` checks, in order:
+
+1. **Daily token budget** — `PLAN_DAILY_TOKENS` per plan (`anonymous`
+   20k, `free` 200k), reset at midnight UTC. Usage lives in
+   `data/usage.db`, apart from the index so re-ingesting keeps it. The
+   check runs before an answer starts, so one answer can overshoot.
+2. **Burst cap** — `MAX_ASKS_PER_MINUTE = 5` per identity, in memory.
+
+Tokens are recorded through `Agent`'s `on_usage` callback after every
+Claude response (`billable_tokens`: input, cache reads and writes, and
+output all count). Each session remembers the identity that started it and
+bills that identity; a different caller presenting the same session id
+gets a new session, so a leaked id cannot spend someone else's budget.
+
+Signed-in users are all on the `free` plan for now. Paid tiers would add
+entries to `PLAN_DAILY_TOKENS` and read the user's plan from their Clerk
+session claims in `plan_for`.
+
+Behind a reverse proxy, anonymous callers are told apart by
+`request.client.host`, which uvicorn takes from `X-Forwarded-For` only for
+trusted proxies (`--forwarded-allow-ips`, default `127.0.0.1`). Through the
+Vite dev proxy every anonymous caller shares one `127.0.0.1` budget.
 
 Concurrency and state:
 
@@ -229,7 +269,7 @@ wins), then dispatches:
 - `search QUERY [-k]` — print ranked hits.
 - `ask [QUESTION]` — one question, or an interactive loop (`exit`/`quit`
   to leave) with numbered footnotes.
-- `serve [--host] [--port]` — run the API.
+- `serve [--host] [--port] [--usage-db]` — run the API.
 
 `--db` (before the subcommand) overrides the index path for all of them.
 
@@ -238,6 +278,7 @@ wins), then dispatches:
 | Path | Produced by | Committed? |
 | --- | --- | --- |
 | `data/srd.db`, `data/chunks.jsonl` | `dnd-rag ingest` | No (git-ignored) |
+| `data/usage.db` | `dnd-rag serve` (token usage) | No (git-ignored) |
 | `.venv/` | `uv sync` | No |
 | `site/node_modules/`, `site/dist/`, `site/.astro/` | pnpm / Astro | No |
 | `uv.lock`, `site/pnpm-lock.yaml` | uv / pnpm | Yes — never edit by hand |

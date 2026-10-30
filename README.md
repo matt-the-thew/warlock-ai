@@ -47,8 +47,14 @@ cd site && pnpm install && pnpm dev   # http://localhost:4321, proxies /api
 ```
 
 `api.py` exposes `POST /api/ask` (the agent's events as server-sent events, with a
-`session` id for follow-up questions) and `GET /api/search?q=` (the index, no Claude
-call). The site has three pages: Home, Chat and Discover (direct SRD search).
+`session` id for follow-up questions), `GET /api/search?q=` (the index, no Claude
+call) and `GET /api/usage` (the caller's daily token budget). The site has three
+pages: Home, Chat and Discover (direct SRD search).
+
+Sign-in uses [Clerk](https://clerk.com): set `PUBLIC_CLERK_PUBLISHABLE_KEY` in `.env` (no
+secret key needed). Chat is metered by tokens per day: 20k for anonymous
+visitors (by IP), 200k for signed-in users (`limits.py`), plus 5 questions a minute.
+Usage is stored in `data/usage.db`.
 
 `data/` is generated and git-ignored. PyMuPDF (AGPL) is an optional `ingest` extra; you
 don't need it to query the index.

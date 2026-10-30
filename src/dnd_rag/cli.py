@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PDF = ROOT / "SRD_CC_v5.2.1.pdf"
 DEFAULT_DB = ROOT / "data" / "srd.db"
+# Token usage for rate limits; kept apart from the index so re-ingesting keeps it.
+DEFAULT_USAGE_DB = ROOT / "data" / "usage.db"
 
 
 def ingest(pdf: Path, db: Path) -> None:
@@ -98,6 +100,7 @@ def main() -> None:
     p_serve = sub.add_parser("serve", help="Run the HTTP API the site talks to")
     p_serve.add_argument("--host", default="127.0.0.1")
     p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--usage-db", type=Path, default=DEFAULT_USAGE_DB)
 
     args = parser.parse_args()
     if args.command == "ingest":
@@ -107,6 +110,6 @@ def main() -> None:
     elif args.command == "serve":
         from .api import serve
 
-        serve(args.db, args.host, args.port)
+        serve(args.db, args.usage_db, args.host, args.port)
     else:
         chat(args.db, args.question)
