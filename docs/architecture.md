@@ -276,6 +276,13 @@ Concurrency and state:
 - `Sessions` holds `Agent`s in memory, evicted oldest first past
   `MAX_SESSIONS = 200`, and lost on restart.
 
+In the `Dockerfile` image (Cloud Run), `usage.db` is on the container's
+own disk, so budgets and the spend total reset when the container is
+replaced, and both they and `Sessions` are per instance: deploy with
+`--max-instances=1 --session-affinity`. TODO: move `UsageStore` and
+`SpendLedger` to a shared database (Firestore or Cloud SQL) so the cap
+survives restarts and the service can scale out.
+
 ## 6. CLI (`cli.py`)
 
 `main()` loads `.env` from the repo root (an already-exported variable

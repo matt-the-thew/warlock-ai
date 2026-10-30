@@ -1,4 +1,4 @@
-# dnd-rag
+# Warlock_AI
 
 A retrieval-augmented rules assistant for the D&D **System Reference Document 5.2.1**
 (CC-BY-4.0, `SRD_CC_v5.2.1.pdf`), plus an Astro site (`site/`) to chat with it.
@@ -74,3 +74,22 @@ issued the API key as the hard backstop. Usage and spend are stored in `data/usa
 
 `data/` is generated and git-ignored. PyMuPDF (AGPL) is an optional `ingest` extra; you
 don't need it to query the index.
+
+## Deploying the API
+
+The `Dockerfile` packages `dnd-rag serve` for Cloud Run. Run `uv run dnd-rag ingest`
+first: the image copies in `data/srd.db` from your working tree and downloads the
+embedding model at build time, so it starts without the network or PyMuPDF.
+
+```sh
+gcloud run deploy dnd-rag-api --source . --region us-central1 \
+  --allow-unauthenticated --max-instances=1 --session-affinity --memory=1Gi \
+  --set-secrets=ANTHROPIC_API_KEY=anthropic-api-key:latest \
+  --set-env-vars=TRUSTED_PROXY_HOPS=1,PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...,CLERK_AUTHORIZED_PARTIES=https://your.domain
+```
+
+Set `TRUSTED_PROXY_HOPS=2` instead if Firebase Hosting forwards `/api` to the
+service. `data/usage.db` lives inside the container, so the daily budgets and the
+monthly spend cap reset whenever Cloud Run replaces it, and one instance only
+keeps chat sessions together; the Claude Console spend limit is the real backstop
+until usage moves to a shared database.

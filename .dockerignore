@@ -1,0 +1,10 @@
+# Send only what the Dockerfile copies; everything else (.env, .venv, site/,
+# the PDF) stays out of the build context.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!README.md
+!src/dnd_rag/
+!data/srd.db
+**/__pycache__
