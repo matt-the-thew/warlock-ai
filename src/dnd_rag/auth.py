@@ -11,6 +11,7 @@ API runs behind proxies (see `client_ip`).
 from __future__ import annotations
 
 import base64
+import hmac
 import os
 from dataclasses import dataclass
 
@@ -28,6 +29,12 @@ CLOCK_LEEWAY_SECONDS = 5
 # directly, 1 on Cloud Run alone, 2 behind the site's Cloudflare Worker
 # (site/worker/index.ts) and then Cloud Run.
 TRUSTED_PROXY_HOPS_ENV = "TRUSTED_PROXY_HOPS"
+# A secret the site's Cloudflare Worker sends in PROXY_SECRET_HEADER. When it
+# is set, the API refuses requests without it, so callers cannot skip the
+# Worker and forge X-Forwarded-For against the public Cloud Run URL. The
+# Worker reads the same value from its own PROXY_SECRET secret.
+PROXY_SECRET_ENV = "PROXY_SECRET"
+PROXY_SECRET_HEADER = "X-Proxy-Secret"
 
 
 class AuthError(Exception):
@@ -83,6 +90,21 @@ def trusted_hops_from_env() -> int:
     if hops < 0:
         raise ValueError(f"{TRUSTED_PROXY_HOPS_ENV} must not be negative")
     return hops
+
+
+def proxy_secret_from_env() -> str | None:
+    """The `PROXY_SECRET` setting, or None if requests need no secret."""
+    secret = os.environ.get(PROXY_SECRET_ENV, "").strip()
+    if secret == "":
+        return None
+    return secret
+
+
+def is_proxy_secret(expected: str, presented: str | None) -> bool:
+    """Whether a request's proxy secret matches, compared in constant time."""
+    if presented is None:
+        return False
+    return hmac.compare_digest(expected.encode(), presented.encode())
 
 
 def frontend_api_from_publishable_key(publishable_key: str) -> str:

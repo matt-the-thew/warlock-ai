@@ -17,7 +17,7 @@ import logging
 import math
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -32,6 +32,8 @@ from starlette.exceptions import HTTPException
 
 from .agent import Agent, UsageCallback
 from .auth import (
+    PROXY_SECRET_ENV,
+    PROXY_SECRET_HEADER,
     PUBLISHABLE_KEY_ENV,
     AuthError,
     ClerkVerifier,
@@ -39,6 +41,8 @@ from .auth import (
     anonymous,
     bearer_token,
     client_ip,
+    is_proxy_secret,
+    proxy_secret_from_env,
     trusted_hops_from_env,
     verifier_from_env,
 )
@@ -148,11 +152,13 @@ def create_app(
     verifier: ClerkVerifier | None,
     monthly_limit_usd: float,
     trusted_proxy_hops: int,
+    proxy_secret: str | None,
 ) -> FastAPI:
     """The API app. With no `verifier` (Clerk not configured) everyone is anonymous.
 
     `trusted_proxy_hops` is how many proxies in front of the API append to
-    `X-Forwarded-For`; see `auth.client_ip`.
+    `X-Forwarded-For`; see `auth.client_ip`. With a `proxy_secret`, every
+    request must carry it (see `auth.PROXY_SECRET_ENV`).
     """
     app = FastAPI(title="dnd-rag", docs_url=None, redoc_url=None, openapi_url=None)
     index = LockedIndex(db)
@@ -190,6 +196,17 @@ def create_app(
                 401, "Your session has expired; sign in again"
             ) from error
         return Identity(key=f"user:{user_id}", user_id=user_id)
+
+    @app.middleware("http")
+    async def require_proxy_secret(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if proxy_secret is None:
+            return await call_next(request)
+        presented = request.headers.get(PROXY_SECRET_HEADER)
+        if not is_proxy_secret(proxy_secret, presented):
+            return JSONResponse({"error": "Use the site"}, status_code=403)
+        return await call_next(request)
 
     @app.exception_handler(HTTPException)
     async def http_error(_: Request, error: HTTPException) -> JSONResponse:
@@ -277,6 +294,18 @@ def serve(db: Path, usage_db: Path, host: str, port: int) -> None:
         )
     monthly_limit_usd = limit_from_env()
     print(f"Monthly spend cap: ${monthly_limit_usd:.2f} (set {LIMIT_ENV} to change)")
-    app = create_app(db, usage_db, verifier, monthly_limit_usd, trusted_hops_from_env())
+    proxy_secret = proxy_secret_from_env()
+    if proxy_secret is None:
+        log.warning(
+            "%s is not set: the API accepts requests from anyone", PROXY_SECRET_ENV
+        )
+    app = create_app(
+        db,
+        usage_db,
+        verifier,
+        monthly_limit_usd,
+        trusted_hops_from_env(),
+        proxy_secret,
+    )
     # Off so `client_ip` alone reads X-Forwarded-For, by TRUSTED_PROXY_HOPS.
     uvicorn.run(app, host=host, port=port, proxy_headers=False)

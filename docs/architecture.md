@@ -269,6 +269,12 @@ entry that many places from the right, ignoring anything further left,
 which the caller could forge. Unset (0), it uses the TCP peer, so through
 the Vite dev proxy every anonymous caller shares one `127.0.0.1` budget.
 
+That only holds if callers cannot reach the API except through those
+proxies. Cloud Run's URL is public, so with `PROXY_SECRET` set every
+request must carry it in `X-Proxy-Secret` (`auth.PROXY_SECRET_HEADER`, the
+same name in `site/worker/index.ts`) or get a 403 `{"error"}`. The Worker
+adds it; locally it is unset and nothing is checked.
+
 Concurrency and state:
 
 - `LockedIndex` wraps one `SrdIndex` (one SQLite connection, one embedding

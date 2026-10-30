@@ -94,11 +94,13 @@ gcloud run deploy dnd-rag-api --source . --region us-central1 \
   --set-env-vars=TRUSTED_PROXY_HOPS=2,PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...,CLERK_AUTHORIZED_PARTIES=https://your.domain
 ```
 
-`TRUSTED_PROXY_HOPS=2` counts the Worker and Google's front end. `data/usage.db`
-lives inside the container, so the daily budgets and the monthly spend cap reset
-whenever Cloud Run replaces it, and one instance only keeps chat sessions
-together; the Claude Console spend limit is the real backstop until usage moves
-to a shared database.
+`TRUSTED_PROXY_HOPS=2` counts the Worker and Google's front end. With `PROXY_SECRET`
+set, the API answers only requests carrying it, which the Worker adds, so nobody can
+call the public Cloud Run URL directly and forge their IP. `data/usage.db` lives
+inside the container, so the daily budgets and the monthly spend cap reset whenever
+Cloud Run replaces it, and one instance only keeps chat sessions together; the
+Claude Console spend limit is the real backstop until usage moves to a shared
+database.
 
 **Site.** Put the Cloud Run URL and your domain in `site/wrangler.jsonc`, make
 sure `.env` has the `pk_live_` Clerk key (Astro bakes it in at build time), then:
