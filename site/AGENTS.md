@@ -1,3 +1,9 @@
+# site/AGENTS.md
+
+Astro tooling notes for work inside `site/`. The repo-wide rules in
+[../AGENTS.md](../AGENTS.md) (git, commits, code style) apply here too, and
+[../docs/site.md](../docs/site.md) explains how the site is built.
+
 ## Development
 
 When starting the dev server, use background mode:
