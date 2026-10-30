@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 
@@ -14,6 +15,9 @@ DEFAULT_PDF = ROOT / "SRD_CC_v5.2.1.pdf"
 DEFAULT_DB = ROOT / "data" / "srd.db"
 # Token usage and monthly spend; kept apart from the index so re-ingesting keeps it.
 DEFAULT_USAGE_DB = ROOT / "data" / "usage.db"
+# Hosts such as Cloud Run choose the port and pass it in $PORT.
+PORT_ENV = "PORT"
+DEFAULT_PORT = 8000
 
 
 def ingest(pdf: Path, db: Path) -> None:
@@ -91,6 +95,14 @@ def show_spend(usage_db: Path) -> None:
     )
 
 
+def default_port() -> int:
+    """The port `serve` listens on when `--port` is not given."""
+    port_setting = os.environ.get(PORT_ENV, "").strip()
+    if port_setting == "":
+        return DEFAULT_PORT
+    return int(port_setting)
+
+
 def main() -> None:
     # Put ANTHROPIC_API_KEY from the project's .env into the environment, where
     # anthropic.Anthropic() looks for it. A variable already exported wins.
@@ -114,7 +126,7 @@ def main() -> None:
 
     p_serve = sub.add_parser("serve", help="Run the HTTP API the site talks to")
     p_serve.add_argument("--host", default="127.0.0.1")
-    p_serve.add_argument("--port", type=int, default=8000)
+    p_serve.add_argument("--port", type=int, default=default_port())
     p_serve.add_argument("--usage-db", type=Path, default=DEFAULT_USAGE_DB)
 
     p_spend = sub.add_parser("spend", help="Show this month's estimated chat spend")

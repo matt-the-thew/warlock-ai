@@ -200,10 +200,10 @@ breaking (`feat(agent)!:`) and update all three consumers together.
 ## 5. HTTP API (`api.py`)
 
 A FastAPI app (`create_app`) run by uvicorn, started by `dnd-rag serve` on
-`127.0.0.1:8000`. Endpoints are plain `def` functions, so FastAPI runs them
-in its thread pool and the blocking search and Claude stream never stall the
-event loop. Errors are JSON `{"error": str}`, including request validation
-failures (400).
+`127.0.0.1:8000` (or `$PORT`). Endpoints are plain `def` functions, so
+FastAPI runs them in its thread pool and the blocking search and Claude
+stream never stall the event loop. Errors are JSON `{"error": str}`,
+including request validation failures (400).
 
 - **`GET /api/search?q=<query>&k=<n>`** → `{"results": [Hit fields +
   label]}`. `k` defaults to 8, clamped to `1..MAX_K` (20). No Claude call.
@@ -283,7 +283,8 @@ wins), then dispatches:
 - `search QUERY [-k]` — print ranked hits.
 - `ask [QUESTION]` — one question, or an interactive loop (`exit`/`quit`
   to leave) with numbered footnotes.
-- `serve [--host] [--port] [--usage-db]` — run the API.
+- `serve [--host] [--port] [--usage-db]` — run the API. `--port` defaults
+  to `$PORT` if set (Cloud Run sets it), else 8000.
 - `spend [--usage-db]` — print this month's estimated spend against the cap.
 
 `--db` (before the subcommand) overrides the index path for all of them.
