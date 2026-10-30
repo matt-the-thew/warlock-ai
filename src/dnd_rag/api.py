@@ -98,7 +98,7 @@ class Sessions:
             return new_id, agent
 
     def _meter(self, owner: Identity) -> UsageCallback:
-        def record(usage: BetaUsage) -> None:
+        def record(_model: str, usage: BetaUsage) -> None:
             self.usage.record(owner, billable_tokens(usage))
 
         return record

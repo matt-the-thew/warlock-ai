@@ -84,10 +84,11 @@ def hit_to_search_result(hit: Hit) -> dict:
     }
 
 
-# Receives the `usage` of every Claude response, once per tool round. It fires
-# when each response finishes rather than when `ask()` ends, so a caller that
-# stops consuming `ask()` early still gets the rounds that completed.
-UsageCallback = Callable[[anthropic.types.beta.BetaUsage], None]
+# Receives the model and `usage` of every Claude response, once per tool round.
+# It fires when each response finishes rather than when `ask()` ends, so a
+# caller that stops consuming `ask()` early still gets the rounds that
+# completed. The model is the one that answered, which `spend` prices by.
+UsageCallback = Callable[[str, anthropic.types.beta.BetaUsage], None]
 
 
 class Agent:
@@ -122,7 +123,7 @@ class Agent:
                     raise
                 continue
             if self.on_usage is not None:
-                self.on_usage(response.usage)
+                self.on_usage(response.model, response.usage)
             self.messages.append({"role": "assistant", "content": response.content})
 
             if response.stop_reason == "refusal":
