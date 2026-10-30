@@ -30,7 +30,8 @@ with `../../`. Keep new files in those same folders.
 | `src/pages/index.astro` | Home / title screen. Random splash title is set by an inline script before first paint. |
 | `src/pages/chat.astro` | Mounts `<Chat client:load />`. |
 | `src/pages/discover.astro` | Mounts `<Discover client:load />`. |
-| `components/Navbar.tsx` | Top bar; highlights the active link from `Astro.url.pathname`. |
+| `components/Navbar.tsx` | Top bar; highlights the active link from `Astro.url.pathname`. Renders its `children` (the `Account` island) at the right. |
+| `components/Account.tsx` | Clerk sign-in button, or the user menu when signed in. |
 | `components/Chat.tsx` | Streaming chat with the agent. |
 | `components/Discover.tsx` | Direct index search ("The Spellbook"). |
 | `components/Markdown.tsx` | Tiny renderer for answer text. |
@@ -38,13 +39,24 @@ with `../../`. Keep new files in those same folders.
 | `src/styles/global.css` | Tailwind import, theme tokens, shared component classes. |
 | `public/` | `SRD_CC_v5.2.1.pdf` (for citation links), favicon, warlock icon. |
 
+## Sign-in (Clerk)
+
+`@clerk/astro` runs client-side only; the site stays static output with no
+SSR adapter. `astro.config.mjs` sets `vite.envDir` to the repo root so the
+site and the API share one `.env` (`PUBLIC_CLERK_PUBLISHABLE_KEY`). Islands
+use hooks and components from `@clerk/astro/react`, which share one Clerk
+instance across islands. Without keys Clerk logs an error in the console
+and sign-in does nothing, but the rest of the site works.
+
 ## Chat (`Chat.tsx`)
 
 State is a list of `Turn`s: `user` turns hold text; `warlock` turns hold
 streamed `text`, the `searches` run, deduplicated `sources`, an optional
 `error`, and `done`.
 
-`ask()` POSTs `{question, session}` to `/api/ask` and reads the SSE body
+`ask()` POSTs `{question, session}` to `/api/ask`, with
+`Authorization: Bearer <token>` from Clerk's `getToken()` when signed in,
+and reads the SSE body
 with the local `events()` async generator (the browser's `EventSource` is
 GET-only). `update()` applies each event to the last turn:
 
@@ -55,6 +67,11 @@ GET-only). `update()` applies each event to the last turn:
   `⟦n⟧` marker is appended to the text; repeated citations of the same
   source in a row collapse into one marker.
 - `error` → shown under the answer.
+
+A non-OK response (429 over budget, 401 expired token) shows its JSON
+`error` message under the turn. Above the input, a meter shows today's
+token usage from `GET /api/usage`, refreshed on load, on sign-in/out and
+after each answer.
 
 ### Footnote marker contract
 

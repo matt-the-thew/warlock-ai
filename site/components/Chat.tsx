@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useAuth } from "@clerk/astro/react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
 import { pages, srdPageHref } from "./srd";
 
@@ -22,11 +23,34 @@ type Turn =
       done: boolean;
     };
 
+// GET /api/usage: the caller's daily token budget (see limits.py).
+type Allowance = {
+  plan: string;
+  used: number;
+  limit: number;
+  resets_at: string;
+  signed_in: boolean;
+};
+
 const EXAMPLES = [
   "Can a grappled creature still cast spells?",
   "How far can I long jump?",
   "What does the Fireball spell do?",
 ];
+
+// "7.4k" for compact token counts.
+const thousands = (tokens: number) => `${(tokens / 1000).toFixed(1)}k`;
+
+// The `error` message from an API error response, or a fallback.
+async function errorMessage(res: Response): Promise<string> {
+  try {
+    const body: { error?: string } = await res.json();
+    if (body.error) return body.error;
+  } catch {
+    // Not JSON (e.g. the dev proxy could not reach the API).
+  }
+  return `The tome is sealed (HTTP ${res.status}).`;
+}
 
 // Reads a server-sent event stream from a POST response (EventSource is GET-only).
 async function* events(res: Response) {
@@ -49,6 +73,8 @@ export default function Chat() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const { isSignedIn, getToken } = useAuth();
   const session = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -65,6 +91,30 @@ export default function Chat() {
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [turns]);
+
+  // Signed-in requests carry the Clerk session token, which the API verifies
+  // to bill the user's budget; without one the API meters by IP. getToken()
+  // refreshes the short-lived token when needed.
+  const authHeaders = useCallback(async (): Promise<Record<string, string>> => {
+    if (!isSignedIn) return {};
+    const token = await getToken();
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  }, [isSignedIn, getToken]);
+
+  const refreshAllowance = useCallback(async () => {
+    try {
+      const res = await fetch("/api/usage", { headers: await authHeaders() });
+      if (res.ok) setAllowance(await res.json());
+    } catch {
+      // The meter is informational; a failed refresh just leaves it stale.
+    }
+  }, [authHeaders]);
+
+  // Signing in or out changes whose budget is shown.
+  useEffect(() => {
+    refreshAllowance();
+  }, [refreshAllowance]);
 
   // Apply a change to the warlock turn that is currently streaming.
   const update = (
@@ -89,11 +139,11 @@ export default function Chat() {
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
         body: JSON.stringify({ question, session: session.current }),
       });
-      if (!res.ok || !res.body)
-        throw new Error(`The tome is sealed (HTTP ${res.status}).`);
+      if (!res.ok) throw new Error(await errorMessage(res));
+      if (!res.body) throw new Error("The tome is sealed (empty response).");
       for await (const { type, data } of events(res)) {
         if (type === "session") session.current = data.session;
         else if (type === "search")
@@ -132,6 +182,7 @@ export default function Chat() {
     } finally {
       update(() => ({ done: true }));
       setBusy(false);
+      refreshAllowance();
     }
   }
 
@@ -234,6 +285,14 @@ export default function Chat() {
         ),
       )}
       <div ref={bottom} />
+
+      {allowance && (
+        <p className="text-mist text-lg text-right -mb-4" aria-live="polite">
+          ◆ Power used today: {thousands(allowance.used)} /{" "}
+          {thousands(allowance.limit)}
+          {!allowance.signed_in && " · sign in for more"}
+        </p>
+      )}
 
       <form
         onSubmit={(e) => {

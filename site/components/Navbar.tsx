@@ -3,12 +3,15 @@ type Link = { label: string; href: string };
 type Props = {
   links: Array<Link>;
   current: string;
+  // The account control, passed in from the layout as its own island; the
+  // navbar itself is static HTML.
+  children?: React.ReactNode;
 };
 
 const isActive = (href: string, current: string) =>
   href === "/" ? current === "/" : current.startsWith(href);
 
-const Navbar = ({ links, current }: Props): React.ReactElement => {
+const Navbar = ({ links, current, children }: Props): React.ReactElement => {
   return (
     <header className="border-b-4 border-crimson bg-night">
       <nav className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -47,6 +50,7 @@ const Navbar = ({ links, current }: Props): React.ReactElement => {
             );
           })}
         </ul>
+        {children}
       </nav>
     </header>
   );
