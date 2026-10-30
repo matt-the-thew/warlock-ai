@@ -1,25 +1,34 @@
 """HTTP API for the site: `POST /api/ask` streams agent events, `GET /api/search`.
 
-Standard library only. Answers stream as server-sent events, one JSON
-`{"type", "data"}` object per `data:` line, so the browser can render each
-`Agent.ask()` event as it arrives.
+A FastAPI app served by uvicorn. Answers stream as server-sent events, one
+JSON `{"type", "data"}` object per `data:` line, so the browser can render
+each `Agent.ask()` event as it arrives. Errors are JSON `{"error": str}`.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import uuid
+from collections.abc import Iterator
 from dataclasses import asdict
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+
+import uvicorn
+from fastapi import FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel
+from starlette.exceptions import HTTPException
 
 from .agent import Agent
 from .index import Hit, SrdIndex
 
 MAX_SESSIONS = 200
 MAX_K = 20
+
+log = logging.getLogger(__name__)
 
 
 class LockedIndex:
@@ -34,86 +43,94 @@ class LockedIndex:
             return self._index.search(query, k)
 
 
-class Api:
-    def __init__(self, db: Path):
-        self.index = LockedIndex(db)
-        # Conversations by session id, oldest first, so history survives a page's
-        # follow-up questions.
-        self.sessions: dict[str, Agent] = {}
+class Sessions:
+    """Conversations by session id, oldest first, so history survives a page's
+    follow-up questions. Kept in memory and lost on restart."""
 
-    def agent(self, session: str | None) -> tuple[str, Agent]:
-        if session and session in self.sessions:
-            return session, self.sessions[session]
-        if len(self.sessions) >= MAX_SESSIONS:
-            self.sessions.pop(next(iter(self.sessions)))
-        session = uuid.uuid4().hex
-        self.sessions[session] = Agent(self.index)  # type: ignore[arg-type]
-        return session, self.sessions[session]
+    def __init__(self, index: LockedIndex):
+        self.index = index
+        self._agents: dict[str, Agent] = {}
+        self._lock = threading.Lock()
 
-    def search(self, query: str, k: int) -> list[dict]:
-        return [asdict(h) | {"label": h.citation} for h in self.index.search(query, k)]
+    def get_or_create(self, session: str | None) -> tuple[str, Agent]:
+        with self._lock:
+            if session is not None and session in self._agents:
+                return session, self._agents[session]
+            if len(self._agents) >= MAX_SESSIONS:
+                oldest = next(iter(self._agents))
+                self._agents.pop(oldest)
+            session = uuid.uuid4().hex
+            agent = Agent(self.index)  # type: ignore[arg-type]
+            self._agents[session] = agent
+            return session, agent
 
 
-def make_handler(api: Api) -> type[BaseHTTPRequestHandler]:
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:
-            url = urlparse(self.path)
-            if url.path != "/api/search":
-                return self._json(404, {"error": "Not found"})
-            params = parse_qs(url.query)
-            query = params.get("q", [""])[0].strip()
-            if not query:
-                return self._json(400, {"error": "Missing q"})
-            try:
-                k = max(1, min(MAX_K, int(params.get("k", ["8"])[0])))
-            except ValueError:
-                return self._json(400, {"error": "k must be a number"})
-            self._json(200, {"results": api.search(query, k)})
+class AskRequest(BaseModel):
+    question: str
+    session: str | None = None
 
-        def do_POST(self) -> None:
-            if urlparse(self.path).path != "/api/ask":
-                return self._json(404, {"error": "Not found"})
-            try:
-                length = int(self.headers.get("Content-Length", 0))
-                body = json.loads(self.rfile.read(length) or b"{}")
-            except (ValueError, json.JSONDecodeError):
-                return self._json(400, {"error": "Body must be JSON"})
-            question = str(body.get("question", "")).strip()
-            if not question:
-                return self._json(400, {"error": "Missing question"})
-            session, agent = api.agent(body.get("session"))
 
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
-            self._event("session", {"session": session})
-            try:
-                for event in agent.ask(question):
-                    self._event(event.type, event.data)
-            except (BrokenPipeError, ConnectionResetError):
-                return
-            except Exception as e:  # noqa: BLE001 - report to the client, keep serving
-                self.log_error("ask failed: %r", e)
-                self._event("error", {"message": "Something went wrong answering that."})
+def sse(type_: str, data: dict) -> str:
+    payload = json.dumps({"type": type_, "data": data}, ensure_ascii=False)
+    return f"data: {payload}\n\n"
 
-        def _event(self, type_: str, data: dict) -> None:
-            payload = json.dumps({"type": type_, "data": data}, ensure_ascii=False)
-            self.wfile.write(f"data: {payload}\n\n".encode())
-            self.wfile.flush()
 
-        def _json(self, status: int, body: dict) -> None:
-            raw = json.dumps(body, ensure_ascii=False).encode()
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
-            self.wfile.write(raw)
+def stream_answer(session: str, agent: Agent, question: str) -> Iterator[str]:
+    """The SSE body for one question: the session id first, then agent events."""
+    yield sse("session", {"session": session})
+    try:
+        for event in agent.ask(question):
+            yield sse(event.type, event.data)
+    except Exception:  # noqa: BLE001 - report to the client, keep serving
+        log.exception("ask failed")
+        yield sse("error", {"message": "Something went wrong answering that."})
 
-    return Handler
+
+def create_app(db: Path) -> FastAPI:
+    app = FastAPI(title="dnd-rag", docs_url=None, redoc_url=None, openapi_url=None)
+    index = LockedIndex(db)
+    sessions = Sessions(index)
+
+    @app.exception_handler(HTTPException)
+    async def http_error(_: Request, error: HTTPException) -> JSONResponse:
+        return JSONResponse({"error": error.detail}, status_code=error.status_code)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:
+        # Report only the first problem; loc is e.g. ("query", "k") or ("body",).
+        first = error.errors()[0]
+        field = ".".join(str(part) for part in first["loc"][1:])
+        if field == "":
+            message = "Body must be a JSON object"
+        else:
+            message = f"{field}: {first['msg']}"
+        return JSONResponse({"error": message}, status_code=400)
+
+    # Plain `def` endpoints run in FastAPI's thread pool, so the blocking index
+    # search and the Claude stream never stall the event loop.
+    @app.get("/api/search")
+    def search(q: str = "", k: int = Query(8)) -> JSONResponse:
+        query = q.strip()
+        if query == "":
+            return JSONResponse({"error": "Missing q"}, status_code=400)
+        k = max(1, min(MAX_K, k))
+        results = [asdict(hit) | {"label": hit.citation} for hit in index.search(query, k)]
+        return JSONResponse({"results": results})
+
+    @app.post("/api/ask")
+    def ask(body: AskRequest) -> Response:
+        question = body.question.strip()
+        if question == "":
+            return JSONResponse({"error": "Missing question"}, status_code=400)
+        session, agent = sessions.get_or_create(body.session)
+        return StreamingResponse(
+            stream_answer(session, agent, question),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"},
+        )
+
+    return app
 
 
 def serve(db: Path, host: str, port: int) -> None:
-    server = ThreadingHTTPServer((host, port), make_handler(Api(db)))
-    print(f"Serving on http://{host}:{port}")
-    server.serve_forever()
+    uvicorn.run(create_app(db), host=host, port=port)

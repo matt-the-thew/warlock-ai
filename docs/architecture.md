@@ -27,7 +27,7 @@ All code lives in `src/dnd_rag/`. `cli.py` is the single entry point
 | `chunk.py` | `Block`s → retrieval `Chunk`s, one per SRD entry | `parse.Block` |
 | `index.py` | Build the SQLite index; hybrid search returning `Hit`s | fastembed, numpy, `chunk.Chunk` |
 | `agent.py` | Claude tool-use loop; yields `Event`s | anthropic, `index` |
-| `api.py` | Stdlib HTTP server: `/api/ask` (SSE), `/api/search` | `agent`, `index` |
+| `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search` | fastapi, uvicorn, `agent`, `index` |
 | `cli.py` | `ingest`, `search`, `ask`, `serve` subcommands; loads `.env` | everything, lazily |
 
 ### Licensing boundary: PyMuPDF
@@ -192,8 +192,11 @@ breaking (`feat(agent)!:`) and update all three consumers together.
 
 ## 5. HTTP API (`api.py`)
 
-Standard library only (`ThreadingHTTPServer`), started by
-`dnd-rag serve` on `127.0.0.1:8000`.
+A FastAPI app (`create_app`) run by uvicorn, started by `dnd-rag serve` on
+`127.0.0.1:8000`. Endpoints are plain `def` functions, so FastAPI runs them
+in its thread pool and the blocking search and Claude stream never stall the
+event loop. Errors are JSON `{"error": str}`, including request validation
+failures (400).
 
 - **`GET /api/search?q=<query>&k=<n>`** → `{"results": [Hit fields +
   label]}`. `k` defaults to 8, clamped to `1..MAX_K` (20). No Claude call.
@@ -209,8 +212,8 @@ Concurrency and state:
 
 - `LockedIndex` wraps one `SrdIndex` (one SQLite connection, one embedding
   model) behind a lock shared by all request threads.
-- Sessions (`Api.sessions`) are `Agent`s kept in memory, evicted oldest
-  first past `MAX_SESSIONS = 200`, and lost on restart.
+- `Sessions` holds `Agent`s in memory, evicted oldest first past
+  `MAX_SESSIONS = 200`, and lost on restart.
 
 ## 6. CLI (`cli.py`)
 
