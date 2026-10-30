@@ -30,7 +30,9 @@ def ingest(pdf: Path, db: Path) -> None:
             f.write(json.dumps(c.to_dict(), ensure_ascii=False) + "\n")
 
     words = [len(c.text.split()) for c in chunks]
-    print(f"{len(chunks)} chunks, {sum(words)} words (median {sorted(words)[len(words) // 2]})")
+    print(
+        f"{len(chunks)} chunks, {sum(words)} words (median {sorted(words)[len(words) // 2]})"
+    )
     for chapter, n in Counter(c.chapter for c in chunks).items():
         print(f"  {n:5}  {chapter}")
     print(f"Wrote {jsonl}")
@@ -105,7 +107,9 @@ def main() -> None:
     p_search.add_argument("query")
     p_search.add_argument("-k", type=int, default=5)
 
-    p_ask = sub.add_parser("ask", help="Ask the rules agent (interactive without a question)")
+    p_ask = sub.add_parser(
+        "ask", help="Ask the rules agent (interactive without a question)"
+    )
     p_ask.add_argument("question", nargs="?")
 
     p_serve = sub.add_parser("serve", help="Run the HTTP API the site talks to")

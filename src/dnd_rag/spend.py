@@ -81,11 +81,15 @@ PRICING: dict[str, ModelPricing] = {
         long_prompt=Rates(input=0.50, output=2.50, cache_read=0.05),
         long_prompt_tokens=100_000,
     ),
-    "claude-opus-5-5": ModelPricing(standard=Rates(input=4.00, output=20.00, cache_read=0.20)),
+    "claude-opus-5-5": ModelPricing(
+        standard=Rates(input=4.00, output=20.00, cache_read=0.20)
+    ),
 }
 # A model missing from PRICING is charged at the dearest known rates, so a
 # pricing gap can only make the cap stop chat early, never late.
-_FALLBACK_PRICING = ModelPricing(standard=Rates(input=4.00, output=20.00, cache_read=0.20))
+_FALLBACK_PRICING = ModelPricing(
+    standard=Rates(input=4.00, output=20.00, cache_read=0.20)
+)
 
 
 def _pricing_for(model: str) -> ModelPricing:
@@ -119,7 +123,8 @@ def _cost_usd(
 
 
 def _cache_writes(
-    usage: anthropic.types.beta.BetaUsage | anthropic.types.beta.BetaMessageIterationUsage,
+    usage: anthropic.types.beta.BetaUsage
+    | anthropic.types.beta.BetaMessageIterationUsage,
 ) -> tuple[int, int]:
     """(5-minute, 1-hour) cache write tokens; all 5-minute if not broken down."""
     if usage.cache_creation is None:

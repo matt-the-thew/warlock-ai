@@ -1,5 +1,11 @@
 import { useAuth } from "@clerk/astro/react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Markdown from "./Markdown";
 import { pages, srdPageHref } from "./srd";
 
@@ -139,7 +145,10 @@ export default function Chat() {
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        headers: {
+          "Content-Type": "application/json",
+          ...(await authHeaders()),
+        },
         body: JSON.stringify({ question, session: session.current }),
       });
       if (!res.ok) throw new Error(await errorMessage(res));
@@ -221,7 +230,9 @@ export default function Chat() {
       {turns.map((turn, i) =>
         turn.role === "user" ? (
           <div key={i} className="flex justify-end">
-            <div className="pixel-box slate max-w-[80%] whitespace-pre-wrap">{turn.text}</div>
+            <div className="pixel-box slate max-w-[80%] whitespace-pre-wrap">
+              {turn.text}
+            </div>
           </div>
         ) : (
           <div key={i} className="flex flex-col gap-2">
@@ -245,7 +256,10 @@ export default function Chat() {
                   WARLOCK
                 </p>
                 {turn.text ? (
-                  <Markdown text={turn.text} noteHref={(n) => `#turn-${i}-source-${n}`} />
+                  <Markdown
+                    text={turn.text}
+                    noteHref={(n) => `#turn-${i}-source-${n}`}
+                  />
                 ) : (
                   !turn.error && (
                     <p className="text-mist">
@@ -274,7 +288,10 @@ export default function Chat() {
                         className="source-badge bg-crimson border-2 border-ink px-1.5 text-lg text-bone no-underline hover:bg-ember"
                       >
                         {s.n} {s.title} · {s.page}
-                        <span className="sr-only"> (opens the SRD PDF in a new tab)</span>
+                        <span className="sr-only">
+                          {" "}
+                          (opens the SRD PDF in a new tab)
+                        </span>
                       </a>
                     ))}
                   </div>
@@ -315,7 +332,11 @@ export default function Chat() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             // Enter sends; Shift+Enter adds a line. Leave IME composition alone.
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing
+            ) {
               e.preventDefault();
               ask(input);
             }

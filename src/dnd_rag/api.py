@@ -84,7 +84,9 @@ class Sessions:
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
 
-    def get_or_create(self, session_id: str | None, owner: Identity) -> tuple[str, Agent]:
+    def get_or_create(
+        self, session_id: str | None, owner: Identity
+    ) -> tuple[str, Agent]:
         with self._lock:
             if session_id is not None:
                 existing = self._sessions.get(session_id)
@@ -152,7 +154,9 @@ def create_app(
     sessions = Sessions(index, usage, spend)
     burst = BurstLimiter()
 
-    def identify(request: Request, authorization: str | None = Header(None)) -> Identity:
+    def identify(
+        request: Request, authorization: str | None = Header(None)
+    ) -> Identity:
         """The caller: a verified Clerk user, or anonymous by IP if no token is sent.
 
         A token that is sent but invalid is a 401 rather than a silent downgrade
@@ -173,7 +177,9 @@ def create_app(
             user_id = verifier.verify(token)
         except AuthError as error:
             log.info("rejected token: %s", error)
-            raise HTTPException(401, "Your session has expired; sign in again") from error
+            raise HTTPException(
+                401, "Your session has expired; sign in again"
+            ) from error
         return Identity(key=f"user:{user_id}", user_id=user_id)
 
     @app.exception_handler(HTTPException)
@@ -181,7 +187,9 @@ def create_app(
         return JSONResponse({"error": error.detail}, status_code=error.status_code)
 
     @app.exception_handler(RequestValidationError)
-    async def invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:
+    async def invalid_request(
+        _: Request, error: RequestValidationError
+    ) -> JSONResponse:
         # Report only the first problem; loc is e.g. ("query", "k") or ("body",).
         first = error.errors()[0]
         field = ".".join(str(part) for part in first["loc"][1:])
@@ -199,7 +207,9 @@ def create_app(
         if query == "":
             return JSONResponse({"error": "Missing q"}, status_code=400)
         k = max(1, min(MAX_K, k))
-        results = [asdict(hit) | {"label": hit.citation} for hit in index.search(query, k)]
+        results = [
+            asdict(hit) | {"label": hit.citation} for hit in index.search(query, k)
+        ]
         return JSONResponse({"results": results})
 
     @app.get("/api/usage")
@@ -217,7 +227,9 @@ def create_app(
         monthly = spend.current()
         if monthly.is_exhausted:
             log.warning(
-                "monthly spend cap reached: $%.2f of $%.2f", monthly.spent_usd, monthly.limit_usd
+                "monthly spend cap reached: $%.2f of $%.2f",
+                monthly.spent_usd,
+                monthly.limit_usd,
             )
             return rate_limited(
                 "The warlock has spent this month's power. It returns on the 1st.",
@@ -233,7 +245,9 @@ def create_app(
             )
         wait = burst.try_acquire(identity)
         if wait is not None:
-            return rate_limited("Slow down, traveller. Ask again in a moment.", retry_after=wait)
+            return rate_limited(
+                "Slow down, traveller. Ask again in a moment.", retry_after=wait
+            )
 
         session, agent = sessions.get_or_create(body.session, identity)
         return StreamingResponse(
@@ -248,7 +262,12 @@ def create_app(
 def serve(db: Path, usage_db: Path, host: str, port: int) -> None:
     verifier = verifier_from_env()
     if verifier is None:
-        log.warning("%s is not set: sign-in is disabled, everyone is anonymous", PUBLISHABLE_KEY_ENV)
+        log.warning(
+            "%s is not set: sign-in is disabled, everyone is anonymous",
+            PUBLISHABLE_KEY_ENV,
+        )
     monthly_limit_usd = limit_from_env()
     print(f"Monthly spend cap: ${monthly_limit_usd:.2f} (set {LIMIT_ENV} to change)")
-    uvicorn.run(create_app(db, usage_db, verifier, monthly_limit_usd), host=host, port=port)
+    uvicorn.run(
+        create_app(db, usage_db, verifier, monthly_limit_usd), host=host, port=port
+    )

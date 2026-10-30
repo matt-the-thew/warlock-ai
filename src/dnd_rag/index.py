@@ -85,7 +85,9 @@ def build_index(chunks: list[Chunk], db_path: Path) -> None:
 
     with sqlite3.connect(db_path) as db:
         db.executescript(SCHEMA)
-        for rowid, (chunk, vec) in enumerate(zip(chunks, vectors, strict=True), start=1):
+        for rowid, (chunk, vec) in enumerate(
+            zip(chunks, vectors, strict=True), start=1
+        ):
             db.execute(
                 "INSERT INTO chunks VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
@@ -112,9 +114,13 @@ class SrdIndex:
     def __init__(self, db_path: Path):
         self.db = sqlite3.connect(db_path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
-        rows = self.db.execute("SELECT rowid, embedding FROM chunks ORDER BY rowid").fetchall()
+        rows = self.db.execute(
+            "SELECT rowid, embedding FROM chunks ORDER BY rowid"
+        ).fetchall()
         self._rowids = np.array([r["rowid"] for r in rows])
-        self._matrix = np.vstack([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
+        self._matrix = np.vstack(
+            [np.frombuffer(r["embedding"], dtype=np.float32) for r in rows]
+        )
 
     @cached_property
     def _model(self) -> TextEmbedding:
