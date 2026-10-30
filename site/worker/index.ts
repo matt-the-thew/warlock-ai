@@ -11,7 +11,16 @@
 interface Env {
   /** The Cloud Run service URL, e.g. `https://dnd-rag-api-abc123-uc.a.run.app`. */
   API_ORIGIN: string;
+  /**
+   * Proves to the API that a request came through this Worker. Must match the
+   * API's PROXY_SECRET (`auth.PROXY_SECRET_ENV`); set it with
+   * `wrangler secret put PROXY_SECRET`.
+   */
+  PROXY_SECRET: string;
 }
+
+// The header the API checks for the secret: `auth.PROXY_SECRET_HEADER`.
+const PROXY_SECRET_HEADER = "X-Proxy-Secret";
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -29,6 +38,7 @@ export default {
     } else {
       forwarded.headers.set("X-Forwarded-For", visitorIp);
     }
+    forwarded.headers.set(PROXY_SECRET_HEADER, env.PROXY_SECRET);
     return fetch(forwarded);
   },
 };

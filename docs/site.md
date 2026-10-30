@@ -26,10 +26,14 @@ Wrangler (`wrangler.jsonc`). Cloudflare serves `dist/` directly; only
 to the API on Cloud Run (`API_ORIGIN`) and streams the response back, so
 the site's relative `/api` URLs work unchanged. The Worker also replaces
 `X-Forwarded-For` with the visitor's address (`CF-Connecting-IP`), which
-is what the API's `TRUSTED_PROXY_HOPS=2` relies on.
+is what the API's `TRUSTED_PROXY_HOPS=2` relies on, and adds the
+`X-Proxy-Secret` header the API requires when its `PROXY_SECRET` is set.
+The Worker's copy is a Wrangler secret (`pnpm wrangler secret put
+PROXY_SECRET`), never committed.
 
 To try the Worker locally, run the API and then
-`pnpm wrangler dev --var API_ORIGIN:http://127.0.0.1:8000` after a build.
+`pnpm wrangler dev --var API_ORIGIN:http://127.0.0.1:8000 --var PROXY_SECRET:<value>`
+after a build, using the API's `PROXY_SECRET` (any value if it has none).
 
 ## Layout
 

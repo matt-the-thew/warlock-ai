@@ -87,9 +87,10 @@ lets it through) and downloads the embedding model at build time, so it starts
 without the network or PyMuPDF.
 
 ```sh
+openssl rand -hex 32 | tr -d '\n' | gcloud secrets create proxy-secret --data-file=-
 gcloud run deploy dnd-rag-api --source . --region us-central1 \
   --allow-unauthenticated --max-instances=1 --session-affinity --memory=1Gi \
-  --set-secrets=ANTHROPIC_API_KEY=anthropic-api-key:latest \
+  --set-secrets=ANTHROPIC_API_KEY=anthropic-api-key:latest,PROXY_SECRET=proxy-secret:latest \
   --set-env-vars=TRUSTED_PROXY_HOPS=2,PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...,CLERK_AUTHORIZED_PARTIES=https://your.domain
 ```
 
@@ -103,5 +104,7 @@ to a shared database.
 sure `.env` has the `pk_live_` Clerk key (Astro bakes it in at build time), then:
 
 ```sh
-cd site && pnpm wrangler login && pnpm run deploy
+cd site && pnpm wrangler login
+gcloud secrets versions access latest --secret=proxy-secret | pnpm wrangler secret put PROXY_SECRET
+pnpm run deploy
 ```
