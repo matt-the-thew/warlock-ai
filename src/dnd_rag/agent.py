@@ -16,7 +16,7 @@ import anthropic
 
 from .index import Hit, SrdIndex
 
-MODEL = "claude-opus-5-5"
+MODEL = "claude-haiku-5-5"
 # Rules lookups need careful reading more than long deliberation.
 EFFORT = "medium"
 MAX_TOKENS = 64000

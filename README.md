@@ -32,7 +32,7 @@ uv run dnd-rag ask "Can a grappled creature still cast spells?"
 uv run dnd-rag ask                 # interactive session
 ```
 
-`agent.py` runs a streaming tool-use loop on Claude Opus 5.5. Claude calls
+`agent.py` runs a streaming tool-use loop on Claude Haiku 5.5. Claude calls
 `search_srd(query)`, as often as the question needs. Each hit goes back as a
 `search_result` block (one text block per paragraph) with citations enabled.
 Claude's answer then carries `search_result_location` citations, which the

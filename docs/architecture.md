@@ -138,7 +138,7 @@ stored in `meta`, but `SrdIndex` does not currently check it on load.
 ## 4. Agent (`agent.py`)
 
 `Agent` holds one conversation (`messages`) and runs a streaming tool-use
-loop on `MODEL = "claude-opus-5-5"` with `effort: medium`. Claude has one
+loop on `MODEL = "claude-haiku-5-5"` with `effort: medium`. Claude has one
 tool, `search_srd(query)`, and a system prompt that tells it to answer only
 from search results and to search each rule separately.
 
