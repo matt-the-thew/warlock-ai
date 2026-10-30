@@ -8,7 +8,7 @@ and a future HTTP endpoint can both render them.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -84,12 +84,24 @@ def hit_to_search_result(hit: Hit) -> dict:
     }
 
 
+# Receives the `usage` of every Claude response, once per tool round. It fires
+# when each response finishes rather than when `ask()` ends, so a caller that
+# stops consuming `ask()` early still gets the rounds that completed.
+UsageCallback = Callable[[anthropic.types.beta.BetaUsage], None]
+
+
 class Agent:
     """A conversation with the rules agent. Keeps history across `ask()` calls."""
 
-    def __init__(self, index: SrdIndex, client: anthropic.Anthropic | None = None):
+    def __init__(
+        self,
+        index: SrdIndex,
+        client: anthropic.Anthropic | None = None,
+        on_usage: UsageCallback | None = None,
+    ):
         self.index = index
         self.client = client or anthropic.Anthropic()
+        self.on_usage = on_usage
         self.messages: list[dict] = []
         # search_result_index in a citation counts every search_result block in
         # the request, across all turns, in order; this list mirrors that.
@@ -109,6 +121,8 @@ class Agent:
                 if json_retries > 2:
                     raise
                 continue
+            if self.on_usage is not None:
+                self.on_usage(response.usage)
             self.messages.append({"role": "assistant", "content": response.content})
 
             if response.stop_reason == "refusal":

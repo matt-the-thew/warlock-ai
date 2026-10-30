@@ -150,6 +150,10 @@ Per `ask(question)`:
    citations enabled.
 4. Repeat, up to `MAX_TOOL_ROUNDS = 8`.
 
+`Agent(index, on_usage=...)` takes an optional callback that receives each
+Claude response's `usage` once per tool round; the API uses it to meter
+token budgets (see §5).
+
 Request options worth knowing: `cache_control` caches the prompt prefix
 across rounds; `fallbacks="default"` with the `server-side-fallback` beta
 retries on a fallback model after a safety-classifier decline. A
