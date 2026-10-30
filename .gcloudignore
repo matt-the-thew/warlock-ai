@@ -1,0 +1,18 @@
+# What `gcloud run deploy --source .` uploads to Cloud Build: only what the
+# Dockerfile copies. Without this file gcloud falls back to .gitignore, which
+# leaves out data/srd.db and so breaks the build. gitignore syntax, unlike
+# .dockerignore: a directory must be re-included before files inside it.
+/*
+!/Dockerfile
+!/.dockerignore
+!/pyproject.toml
+!/uv.lock
+!/.python-version
+!/README.md
+!/src/
+/src/*
+!/src/dnd_rag/
+!/data/
+/data/*
+!/data/srd.db
+__pycache__/
