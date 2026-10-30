@@ -29,7 +29,8 @@ All code lives in `src/dnd_rag/`. `cli.py` is the single entry point
 | `agent.py` | Claude tool-use loop; yields `Event`s | anthropic, `index` |
 | `auth.py` | Verify Clerk session tokens; `Identity` of a caller | pyjwt |
 | `limits.py` | Daily token budgets per plan (`data/usage.db`), burst cap | `auth` |
-| `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search`, `/api/usage` | fastapi, uvicorn, `agent`, `index`, `auth`, `limits` |
+| `spend.py` | List-price cost per response, monthly spend cap (`data/usage.db`) | anthropic |
+| `api.py` | FastAPI app: `/api/ask` (SSE), `/api/search`, `/api/usage` | fastapi, uvicorn, `agent`, `index`, `auth`, `limits`, `spend` |
 | `cli.py` | `ingest`, `search`, `ask`, `serve` subcommands; loads `.env` | everything, lazily |
 
 ### Licensing boundary: PyMuPDF
@@ -217,7 +218,7 @@ failures (400).
   `error` event. Over a limit it returns **429** `{"error", "retry_after"}`
   with a `Retry-After` header instead of a stream.
 
-### Auth and rate limits (`auth.py`, `limits.py`)
+### Auth, rate limits and spend (`auth.py`, `limits.py`, `spend.py`)
 
 Sign-in happens entirely in the browser with Clerk. The site sends the
 session token as `Authorization: Bearer <jwt>`; the `identify` dependency
@@ -231,15 +232,28 @@ configured, everyone is anonymous.
 An `Identity.key` (`user:<clerk id>` or `ip:<address>`) is what usage is
 billed to. `/api/ask` checks, in order:
 
-1. **Daily token budget** — `PLAN_DAILY_TOKENS` per plan (`anonymous`
+1. **Monthly spend cap** — one total for the whole service, so no number
+   of users can push the bill past it. When this calendar month's (UTC)
+   estimated spend reaches `MONTHLY_SPEND_LIMIT_USD` (default $9.50),
+   every question gets a 429 until the 1st.
+2. **Daily token budget** — `PLAN_DAILY_TOKENS` per plan (`anonymous`
    20k, `free` 200k), reset at midnight UTC. Usage lives in
    `data/usage.db`, apart from the index so re-ingesting keeps it. The
    check runs before an answer starts, so one answer can overshoot.
-2. **Burst cap** — `MAX_ASKS_PER_MINUTE = 5` per identity, in memory.
+3. **Burst cap** — `MAX_ASKS_PER_MINUTE = 5` per identity, in memory.
 
-Tokens are recorded through `Agent`'s `on_usage` callback after every
-Claude response (`billable_tokens`: input, cache reads and writes, and
-output all count). Each session remembers the identity that started it and
+Usage is recorded through `Agent`'s `on_usage(model, usage)` callback after
+every Claude response: tokens for the caller's budget (`billable_tokens`:
+input, cache reads and writes, and output all count) and dollars for the
+monthly total (`response_cost_usd`, at the list rates in `spend.PRICING`,
+per model and per `usage.iterations` entry so a mid-request model fallback
+is priced correctly). A model missing from `PRICING` is charged at the
+dearest known rates; add it there when `agent.MODEL` changes.
+
+The spend total is an estimate at list price, not the invoice. The hard
+limit is the spend limit on the Claude Console workspace that issued
+`ANTHROPIC_API_KEY`, which also covers `dnd-rag ask` (not metered here);
+keep the cap below it so chat stops politely rather than mid-answer. Each session remembers the identity that started it and
 bills that identity; a different caller presenting the same session id
 gets a new session, so a leaked id cannot spend someone else's budget.
 
@@ -278,7 +292,7 @@ wins), then dispatches:
 | Path | Produced by | Committed? |
 | --- | --- | --- |
 | `data/srd.db`, `data/chunks.jsonl` | `dnd-rag ingest` | No (git-ignored) |
-| `data/usage.db` | `dnd-rag serve` (token usage) | No (git-ignored) |
+| `data/usage.db` | `dnd-rag serve` (token usage, monthly spend) | No (git-ignored) |
 | `.venv/` | `uv sync` | No |
 | `site/node_modules/`, `site/dist/`, `site/.astro/` | pnpm / Astro | No |
 | `uv.lock`, `site/pnpm-lock.yaml` | uv / pnpm | Yes — never edit by hand |

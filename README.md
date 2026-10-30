@@ -54,7 +54,9 @@ pages: Home, Chat and Discover (direct SRD search).
 Sign-in uses [Clerk](https://clerk.com): set `PUBLIC_CLERK_PUBLISHABLE_KEY` in `.env` (no
 secret key needed). Chat is metered by tokens per day: 20k for anonymous
 visitors (by IP), 200k for signed-in users (`limits.py`), plus 5 questions a minute.
-Usage is stored in `data/usage.db`.
+On top of that, chat stops for everyone once the month's estimated spend reaches
+`MONTHLY_SPEND_LIMIT_USD` (default $9.50, `spend.py`). Set a matching spend limit on the Claude Console workspace that
+issued the API key as the hard backstop. Usage and spend are stored in `data/usage.db`.
 
 `data/` is generated and git-ignored. PyMuPDF (AGPL) is an optional `ingest` extra; you
 don't need it to query the index.

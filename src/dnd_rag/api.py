@@ -6,8 +6,8 @@ JSON `{"type", "data"}` object per `data:` line, so the browser can render
 each `Agent.ask()` event as it arrives. Errors are JSON `{"error": str}`.
 
 Callers are identified by `auth` (Clerk token or IP) and `/api/ask` is
-metered by `limits`; search is public and unmetered since it never calls
-Claude.
+metered by `limits` per caller and capped by `spend` for the whole service
+each month; search is public and unmetered since it never calls Claude.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ from .auth import (
 )
 from .index import Hit, SrdIndex
 from .limits import BurstLimiter, UsageStore, billable_tokens
+from .spend import LIMIT_ENV, SpendLedger, limit_from_env, response_cost_usd
 
 MAX_SESSIONS = 200
 MAX_K = 20
@@ -76,9 +77,10 @@ class Sessions:
     budget: another caller presenting it simply gets a new session.
     """
 
-    def __init__(self, index: LockedIndex, usage: UsageStore):
+    def __init__(self, index: LockedIndex, usage: UsageStore, spend: SpendLedger):
         self.index = index
         self.usage = usage
+        self.spend = spend
         self._sessions: dict[str, Session] = {}
         self._lock = threading.Lock()
 
@@ -98,8 +100,9 @@ class Sessions:
             return new_id, agent
 
     def _meter(self, owner: Identity) -> UsageCallback:
-        def record(_model: str, usage: BetaUsage) -> None:
+        def record(model: str, usage: BetaUsage) -> None:
             self.usage.record(owner, billable_tokens(usage))
+            self.spend.record(response_cost_usd(model, usage))
 
         return record
 
@@ -135,12 +138,18 @@ def rate_limited(message: str, retry_after: float, **extra: object) -> JSONRespo
     )
 
 
-def create_app(db: Path, usage_db: Path, verifier: ClerkVerifier | None) -> FastAPI:
+def create_app(
+    db: Path,
+    usage_db: Path,
+    verifier: ClerkVerifier | None,
+    monthly_limit_usd: float,
+) -> FastAPI:
     """The API app. With no `verifier` (Clerk not configured) everyone is anonymous."""
     app = FastAPI(title="dnd-rag", docs_url=None, redoc_url=None, openapi_url=None)
     index = LockedIndex(db)
     usage = UsageStore(usage_db)
-    sessions = Sessions(index, usage)
+    spend = SpendLedger(usage_db, monthly_limit_usd)
+    sessions = Sessions(index, usage, spend)
     burst = BurstLimiter()
 
     def identify(request: Request, authorization: str | None = Header(None)) -> Identity:
@@ -204,6 +213,17 @@ def create_app(db: Path, usage_db: Path, verifier: ClerkVerifier | None) -> Fast
         if question == "":
             return JSONResponse({"error": "Missing question"}, status_code=400)
 
+        # The service-wide cap comes first: when it is spent, no budget helps.
+        monthly = spend.current()
+        if monthly.is_exhausted:
+            log.warning(
+                "monthly spend cap reached: $%.2f of $%.2f", monthly.spent_usd, monthly.limit_usd
+            )
+            return rate_limited(
+                "The warlock has spent this month's power. It returns on the 1st.",
+                retry_after=(monthly.resets_at - datetime.now(UTC)).total_seconds(),
+            )
+
         allowance = usage.allowance(identity)
         if allowance.is_exhausted:
             return rate_limited(
@@ -229,4 +249,6 @@ def serve(db: Path, usage_db: Path, host: str, port: int) -> None:
     verifier = verifier_from_env()
     if verifier is None:
         log.warning("%s is not set: sign-in is disabled, everyone is anonymous", PUBLISHABLE_KEY_ENV)
-    uvicorn.run(create_app(db, usage_db, verifier), host=host, port=port)
+    monthly_limit_usd = limit_from_env()
+    print(f"Monthly spend cap: ${monthly_limit_usd:.2f} (set {LIMIT_ENV} to change)")
+    uvicorn.run(create_app(db, usage_db, verifier, monthly_limit_usd), host=host, port=port)

@@ -68,7 +68,8 @@ GET-only). `update()` applies each event to the last turn:
   source in a row collapse into one marker.
 - `error` → shown under the answer.
 
-A non-OK response (429 over budget, 401 expired token) shows its JSON
+A non-OK response (429 over the daily budget or the monthly spend cap, 401
+expired token) shows its JSON
 `error` message under the turn. Above the input, a meter shows today's
 token usage from `GET /api/usage`, refreshed on load, on sign-in/out and
 after each answer.
