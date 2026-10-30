@@ -4,7 +4,8 @@ The site signs users in with Clerk entirely in the browser and sends the
 session token as `Authorization: Bearer <jwt>`. This module verifies that
 token against Clerk's public signing keys (JWKS), so the API needs only the
 publishable key, never Clerk's secret key. Requests without a token are
-anonymous and identified by IP address.
+anonymous and identified by IP address, read from `X-Forwarded-For` when the
+API runs behind proxies (see `client_ip`).
 """
 
 from __future__ import annotations
@@ -23,6 +24,9 @@ PUBLISHABLE_KEY_ENV = "PUBLIC_CLERK_PUBLISHABLE_KEY"
 AUTHORIZED_PARTIES_ENV = "CLERK_AUTHORIZED_PARTIES"
 # Tolerate small clock differences between Clerk and this server.
 CLOCK_LEEWAY_SECONDS = 5
+# How many proxies in front of the API append to X-Forwarded-For: 0 when run
+# directly, 1 on Cloud Run, 2 behind Firebase Hosting and then Cloud Run.
+TRUSTED_PROXY_HOPS_ENV = "TRUSTED_PROXY_HOPS"
 
 
 class AuthError(Exception):
@@ -47,6 +51,37 @@ class Identity:
 
 def anonymous(ip: str) -> Identity:
     return Identity(key=f"ip:{ip}", user_id=None)
+
+
+def client_ip(peer: str, forwarded_for: str | None, trusted_hops: int) -> str:
+    """The caller's IP address, for telling anonymous callers apart.
+
+    Each trusted proxy appends the address it received the request from, so
+    the entry `trusted_hops` from the right is the one the outermost proxy
+    saw: the caller. Entries left of it come from the caller and can be
+    forged, so they are ignored. With no trusted proxies, or a header too
+    short to hold that entry, the TCP peer is the best we have.
+    """
+    if trusted_hops == 0 or forwarded_for is None:
+        return peer
+    addresses = []
+    for address in forwarded_for.split(","):
+        if address.strip() != "":
+            addresses.append(address.strip())
+    if len(addresses) < trusted_hops:
+        return peer
+    return addresses[-trusted_hops]
+
+
+def trusted_hops_from_env() -> int:
+    """The `TRUSTED_PROXY_HOPS` setting, or 0 if unset."""
+    setting = os.environ.get(TRUSTED_PROXY_HOPS_ENV, "").strip()
+    if setting == "":
+        return 0
+    hops = int(setting)
+    if hops < 0:
+        raise ValueError(f"{TRUSTED_PROXY_HOPS_ENV} must not be negative")
+    return hops
 
 
 def frontend_api_from_publishable_key(publishable_key: str) -> str:

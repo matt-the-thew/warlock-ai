@@ -261,10 +261,13 @@ Signed-in users are all on the `free` plan for now. Paid tiers would add
 entries to `PLAN_DAILY_TOKENS` and read the user's plan from their Clerk
 session claims in `plan_for`.
 
-Behind a reverse proxy, anonymous callers are told apart by
-`request.client.host`, which uvicorn takes from `X-Forwarded-For` only for
-trusted proxies (`--forwarded-allow-ips`, default `127.0.0.1`). Through the
-Vite dev proxy every anonymous caller shares one `127.0.0.1` budget.
+Anonymous callers are told apart by IP (`auth.client_ip`). Behind
+proxies, set `TRUSTED_PROXY_HOPS` to how many of them append to
+`X-Forwarded-For` — 1 on Cloud Run, 2 behind Firebase Hosting and then
+Cloud Run — and the API takes the entry that many places from the right,
+ignoring anything further left, which the caller could forge. Unset (0), it
+uses the TCP peer, so through the Vite dev proxy every anonymous caller
+shares one `127.0.0.1` budget.
 
 Concurrency and state:
 

@@ -38,6 +38,8 @@ from .auth import (
     Identity,
     anonymous,
     bearer_token,
+    client_ip,
+    trusted_hops_from_env,
     verifier_from_env,
 )
 from .index import Hit, SrdIndex
@@ -145,8 +147,13 @@ def create_app(
     usage_db: Path,
     verifier: ClerkVerifier | None,
     monthly_limit_usd: float,
+    trusted_proxy_hops: int,
 ) -> FastAPI:
-    """The API app. With no `verifier` (Clerk not configured) everyone is anonymous."""
+    """The API app. With no `verifier` (Clerk not configured) everyone is anonymous.
+
+    `trusted_proxy_hops` is how many proxies in front of the API append to
+    `X-Forwarded-For`; see `auth.client_ip`.
+    """
     app = FastAPI(title="dnd-rag", docs_url=None, redoc_url=None, openapi_url=None)
     index = LockedIndex(db)
     usage = UsageStore(usage_db)
@@ -155,18 +162,20 @@ def create_app(
     burst = BurstLimiter()
 
     def identify(
-        request: Request, authorization: str | None = Header(None)
+        request: Request,
+        authorization: str | None = Header(None),
+        x_forwarded_for: str | None = Header(None),
     ) -> Identity:
         """The caller: a verified Clerk user, or anonymous by IP if no token is sent.
 
         A token that is sent but invalid is a 401 rather than a silent downgrade
         to anonymous, so the site knows to refresh it.
         """
-        ip = "unknown"
+        peer = "unknown"
         if request.client is not None:
-            ip = request.client.host
+            peer = request.client.host
         if authorization is None:
-            return anonymous(ip)
+            return anonymous(client_ip(peer, x_forwarded_for, trusted_proxy_hops))
 
         token = bearer_token(authorization)
         if token is None:
@@ -268,6 +277,6 @@ def serve(db: Path, usage_db: Path, host: str, port: int) -> None:
         )
     monthly_limit_usd = limit_from_env()
     print(f"Monthly spend cap: ${monthly_limit_usd:.2f} (set {LIMIT_ENV} to change)")
-    uvicorn.run(
-        create_app(db, usage_db, verifier, monthly_limit_usd), host=host, port=port
-    )
+    app = create_app(db, usage_db, verifier, monthly_limit_usd, trusted_hops_from_env())
+    # Off so `client_ip` alone reads X-Forwarded-For, by TRUSTED_PROXY_HOPS.
+    uvicorn.run(app, host=host, port=port, proxy_headers=False)
