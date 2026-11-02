@@ -3,7 +3,7 @@
 // Run. Deploy with `pnpm run deploy` (builds first).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "dnd-rag",
+  "name": "warlock-ai",
   "main": "worker/index.ts",
   "compatibility_date": "2026-10-23",
   "assets": {
