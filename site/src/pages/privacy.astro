@@ -1,0 +1,153 @@
+---
+import DefaultLayout from "../../layouts/DefaultLayout.astro";
+
+// This page describes the data that the API and site collect. Keep it in step
+// with the code: auth.py (Clerk, IP addresses), limits.py (usage.db), api.py
+// (sessions in memory), and DefaultLayout.astro (third-party fonts). A change
+// to any of those may need a change here and a new EFFECTIVE_DATE.
+const EFFECTIVE_DATE = "October 31, 2026";
+const CONTACT_EMAIL = "mmortondeveloper@gmail.com";
+
+const processors = [
+  {
+    name: "Clerk",
+    role: "runs sign-in and stores your account",
+    href: "https://clerk.com/legal/privacy",
+  },
+  {
+    name: "Anthropic",
+    role: "the Claude API, which answers chat questions",
+    href: "https://www.anthropic.com/legal/privacy",
+  },
+  {
+    name: "Cloudflare",
+    role: "serves the site and forwards requests to the API",
+    href: "https://www.cloudflare.com/privacypolicy/",
+  },
+  {
+    name: "Google Cloud",
+    role: "hosts the API (Cloud Run) and keeps its request logs",
+    href: "https://cloud.google.com/terms/cloud-privacy-notice",
+  },
+  {
+    name: "Google Fonts",
+    role: "serves the site's fonts, so your browser contacts Google",
+    href: "https://policies.google.com/privacy",
+  },
+];
+---
+
+<DefaultLayout title="Privacy">
+  <article class="flex flex-col gap-4 text-bone">
+    <h1 class="font-pixel text-lg sm:text-2xl text-ember leading-tight">
+      Privacy Policy
+    </h1>
+    <p class="text-mist">Effective {EFFECTIVE_DATE}</p>
+
+    <p>
+      Warlock is a free rules assistant for the D&D System Reference Document.
+      It collects as little as it can. This page says what it does collect, why,
+      who else sees it, and how long it is kept.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">What we collect</h2>
+    <ul class="list-disc pl-6 flex flex-col gap-2">
+      <li>
+        <strong>Your account, if you sign in.</strong> Clerk stores your email
+        address and, if you sign in with another service such as Google, the
+        name and profile picture it shares. Our server only ever sees your Clerk
+        user ID.
+      </li>
+      <li>
+        <strong>Your IP address, if you chat without signing in.</strong> We use
+        it to give each anonymous visitor a fair daily allowance of questions.
+      </li>
+      <li>
+        <strong>How much you have used today.</strong> Each day we record how
+        many tokens your questions used, against your user ID or IP address, so
+        we can enforce the daily limit.
+      </li>
+      <li>
+        <strong>Your chat questions.</strong> They are sent to Anthropic to be
+        answered. Our server keeps a conversation in memory so follow-up
+        questions make sense; it never writes them to disk.
+      </li>
+      <li>
+        <strong>Your Discover searches.</strong> These are part of the request
+        address, so they appear in our hosting providers' request logs.
+      </li>
+      <li>
+        <strong>Ordinary request details.</strong> Like any website, our hosting
+        providers see your IP address, browser type and the pages you request.
+      </li>
+    </ul>
+
+    <p>
+      We do not use analytics, advertising or tracking cookies. The only cookies
+      are the ones Clerk needs to keep you signed in. We do not sell or share
+      your information for advertising.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">Who else sees it</h2>
+    <p>These services process data on our behalf:</p>
+    <ul class="list-disc pl-6 flex flex-col gap-2">
+      {processors.map((processor) => (
+        <li>
+          <a href={processor.href} class="text-bone hover:text-ember">
+            {processor.name}
+          </a>
+          , which {processor.role}.
+        </li>
+      ))}
+    </ul>
+    <p>
+      Anthropic does not train its models on questions sent through its API. We
+      may also disclose information if the law requires it.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">How long we keep it</h2>
+    <ul class="list-disc pl-6 flex flex-col gap-2">
+      <li>Conversations: until the server restarts.</li>
+      <li>
+        Usage counts and the IP addresses or user IDs they belong to: until the
+        server is redeployed.
+      </li>
+      <li>Request logs: as long as our hosting providers keep them.</li>
+      <li>Your account: until you delete it.</li>
+    </ul>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">Your choices</h2>
+    <p>
+      You can use Chat and Discover without an account. If you have one, you can
+      edit or delete it from the account menu at the top right. To ask what we
+      hold about you or to have it removed, email{" "}
+      <a href={`mailto:${CONTACT_EMAIL}`} class="text-bone hover:text-ember">
+        {CONTACT_EMAIL}
+      </a>
+      .
+    </p>
+    <p>
+      Browsers can send a "Do Not Track" signal. We do not respond to it,
+      because we do not track you across other sites in the first place.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">Children</h2>
+    <p>
+      Warlock is not meant for children under 13, and we do not knowingly
+      collect information from them. If you believe a child has signed up, email
+      us and we will delete the account.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">About the answers</h2>
+    <p>
+      Answers are written by an AI model and can be wrong. Check any rule
+      against the cited SRD page before relying on it.
+    </p>
+
+    <h2 class="font-pixel text-xs text-ember mt-4">Changes</h2>
+    <p>
+      If this policy changes, we will update it here and change the effective
+      date above.
+    </p>
+  </article>
+</DefaultLayout>

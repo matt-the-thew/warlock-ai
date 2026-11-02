@@ -43,10 +43,11 @@ with `../../`. Keep new files in those same folders.
 
 | Path | What it is |
 | --- | --- |
-| `layouts/DefaultLayout.astro` | HTML shell: fonts, navbar links, `<main>`, CC-BY footer. Every page uses it. |
+| `layouts/DefaultLayout.astro` | HTML shell: fonts, navbar links, `<main>`, footer with CC-BY credit and privacy link. Every page uses it. |
 | `src/pages/index.astro` | Home / title screen. Random splash title is set by an inline script before first paint. |
 | `src/pages/chat.astro` | Mounts `<Chat client:load />`. |
 | `src/pages/discover.astro` | Mounts `<Discover client:load />`. |
+| `src/pages/privacy.astro` | Privacy policy, linked from the footer. Describes what `auth.py`, `limits.py`, `api.py` and the layout's fonts collect; update it when they change. |
 | `components/Navbar.tsx` | Top bar; highlights the active link from `Astro.url.pathname`. Renders its `children` (the `Account` island) at the right. |
 | `components/Account.tsx` | Clerk sign-in button, or the user menu when signed in. |
 | `components/Chat.tsx` | Streaming chat with the agent. |

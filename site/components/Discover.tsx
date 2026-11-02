@@ -32,7 +32,7 @@ function Entry({ r }: { r: Result }) {
         {r.path.slice(0, -1).join(" › ")}
       </p>
       <div className="flex items-baseline justify-between gap-3 mb-1">
-        <h2 className="font-pixel text-[11px] leading-relaxed text-ember">
+        <h2 className="font-pixel text-[16px] leading-relaxed text-ember">
           {r.title}
         </h2>
         <a

@@ -19,9 +19,5 @@
   // PROXY_SECRET is a secret, not a var: set it once with
   // `pnpm wrangler secret put PROXY_SECRET`, using the API's value.
   "secrets": { "required": ["PROXY_SECRET"] },
-  "routes": [
-    // TODO: set to your domain. Cloudflare already manages its DNS, so
-    // `wrangler deploy` creates the record and certificate itself.
-    { "pattern": "yourdomain.com", "custom_domain": true },
-  ],
+  "routes": [{ "pattern": "askthewarlock.com", "custom_domain": true }],
 }
